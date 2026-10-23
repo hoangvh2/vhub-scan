@@ -6,6 +6,7 @@ import com.vhub.scan.core.Pt
 import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
+import org.opencv.core.MatOfInt
 import org.opencv.core.MatOfPoint
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Point
@@ -53,7 +54,11 @@ object Imaging {
 
     // ---------------------------------------------------------------- corner detection (classical)
 
-    /** Returns normalised TL,TR,BR,BL (8 doubles). Heuristic baseline; the user can always adjust. */
+    /**
+     * Returns normalised TL,TR,BR,BL (8 doubles). Heuristic baseline; the user can always adjust.
+     * Candidates from several binarisations are scored by how much brighter the inside is than a ring just outside
+     * (paper on a darker surface), so a quad hugging the image border does not win just by being large.
+     */
     fun detectCorners(bgr: Mat): DoubleArray {
         val longSide = max(bgr.cols(), bgr.rows())
         val s = min(1.0, 800.0 / longSide)
@@ -63,54 +68,92 @@ object Imaging {
         Imgproc.cvtColor(work, gray, Imgproc.COLOR_BGR2GRAY)
         Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
         val area = work.cols().toDouble() * work.rows()
+        val cands = ArrayList<List<Pt>>()
 
-        fun bestQuad(binary: Mat): List<Pt>? {
+        fun collect(binary: Mat) {
             val contours = ArrayList<MatOfPoint>()
-            Imgproc.findContours(binary, contours, Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
-            for (c in contours.sortedByDescending { Imgproc.contourArea(it) }.take(8)) {
+            Imgproc.findContours(binary.clone(), contours, Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+            for (c in contours.sortedByDescending { Imgproc.contourArea(it) }.take(5)) {
                 if (Imgproc.contourArea(c) < 0.15 * area) break
-                val c2f = MatOfPoint2f(*c.toArray())
-                val peri = Imgproc.arcLength(c2f, true)
-                val approx = MatOfPoint2f()
-                Imgproc.approxPolyDP(c2f, approx, 0.02 * peri, true)
-                val pts = approx.toArray()
-                if (pts.size == 4 && Imgproc.isContourConvex(MatOfPoint(*pts))) {
-                    return Geometry.orderCorners(pts.map { Pt(it.x, it.y) })
+                val hull = MatOfInt()
+                Imgproc.convexHull(c, hull)
+                val hp = c.toArray()
+                val hullPts = MatOfPoint2f(*hull.toArray().map { hp[it] }.toTypedArray())
+                val peri = Imgproc.arcLength(hullPts, true)
+                var quad: List<Pt>? = null
+                for (eps in doubleArrayOf(0.015, 0.02, 0.03, 0.04, 0.06)) {
+                    val approx = MatOfPoint2f()
+                    Imgproc.approxPolyDP(hullPts, approx, eps * peri, true)
+                    if (approx.rows() == 4) { quad = Geometry.orderCorners(approx.toArray().map { Pt(it.x, it.y) }); break }
                 }
+                if (quad == null) {
+                    val rr = Imgproc.minAreaRect(hullPts)
+                    val box = arrayOf(Point(), Point(), Point(), Point())
+                    rr.points(box)
+                    quad = Geometry.orderCorners(box.map { Pt(it.x, it.y) })
+                }
+                cands += quad
             }
-            // fallback: min-area rect of the largest blob
-            val biggest = contours.maxByOrNull { Imgproc.contourArea(it) } ?: return null
-            if (Imgproc.contourArea(biggest) < 0.15 * area) return null
-            val rr = Imgproc.minAreaRect(MatOfPoint2f(*biggest.toArray()))
-            val box = arrayOf(Point(), Point(), Point(), Point())
-            rr.points(box)
-            return Geometry.orderCorners(box.map { Pt(it.x, it.y) })
         }
 
-        var quad: List<Pt>? = null
         // 1) edges
         val edges = Mat()
         val med = medianOf(gray)
         Imgproc.Canny(gray, edges, max(0.0, 0.66 * med), min(255.0, 1.33 * med))
-        Imgproc.dilate(edges, edges, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0)))
-        quad = bestQuad(edges)
-        // 2) bright-page threshold
-        if (quad == null) {
-            val bin = Mat()
-            Imgproc.threshold(gray, bin, 0.0, 255.0, Imgproc.THRESH_BINARY or Imgproc.THRESH_OTSU)
-            Imgproc.morphologyEx(bin, bin, Imgproc.MORPH_CLOSE, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(15.0, 15.0)))
-            quad = bestQuad(bin)
-            bin.release()
+        Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(7.0, 7.0)))
+        collect(edges)
+        // 2) bright page on darker surface (Otsu), text holes closed
+        val bin = Mat()
+        Imgproc.threshold(gray, bin, 0.0, 255.0, Imgproc.THRESH_BINARY or Imgproc.THRESH_OTSU)
+        Imgproc.morphologyEx(bin, bin, Imgproc.MORPH_CLOSE, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(21.0, 21.0)))
+        collect(bin)
+        // 3) local-contrast variant: pixel brighter than its large-scale surroundings
+        val bg = Mat()
+        Imgproc.GaussianBlur(gray, bg, Size(0.0, 0.0), work.cols() / 6.0)
+        val diff = Mat()
+        Core.subtract(gray, bg, diff)
+        val bin2 = Mat()
+        Imgproc.threshold(diff, bin2, -5.0, 255.0, Imgproc.THRESH_BINARY)
+        Imgproc.morphologyEx(bin2, bin2, Imgproc.MORPH_CLOSE, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(21.0, 21.0)))
+        collect(bin2)
+
+        var best: List<Pt>? = null
+        var bestScore = -1e9
+        for (q in cands) {
+            val sc = scoreQuad(gray, q, area)
+            if (sc > bestScore) { bestScore = sc; best = q }
         }
-        work.release(); gray.release(); edges.release()
+        work.release(); gray.release(); edges.release(); bin.release(); bg.release(); diff.release(); bin2.release()
 
         val w = bgr.cols() * s
         val h = bgr.rows() * s
-        return if (quad == null) {
+        val quad = best
+        return if (quad == null || bestScore < 0.05) {
             doubleArrayOf(0.05, 0.05, 0.95, 0.05, 0.95, 0.95, 0.05, 0.95)
         } else {
             DoubleArray(8) { i -> val p = quad[i / 2]; if (i % 2 == 0) (p.x / w).coerceIn(0.0, 1.0) else (p.y / h).coerceIn(0.0, 1.0) }
         }
+    }
+
+    /** Higher = more paper-like: bright inside vs a ring just outside, plus size; penalises convexity violations and extreme shapes. */
+    private fun scoreQuad(gray: Mat, q: List<Pt>, imgArea: Double): Double {
+        val pts = MatOfPoint(*q.map { Point(it.x, it.y) }.toTypedArray())
+        val mask = Mat.zeros(gray.size(), CvType.CV_8UC1)
+        Imgproc.fillConvexPoly(mask, pts, Scalar(255.0))
+        val k = max(5, gray.cols() / 40)
+        val grown = Mat()
+        Imgproc.dilate(mask, grown, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(k.toDouble(), k.toDouble())))
+        val ring = Mat()
+        Core.subtract(grown, mask, ring)
+        val inside = Core.mean(gray, mask).`val`[0]
+        val ringN = Core.countNonZero(ring)
+        val outside = if (ringN > 50) Core.mean(gray, ring).`val`[0] else inside
+        val frac = Core.countNonZero(mask) / imgArea
+        mask.release(); grown.release(); ring.release()
+        val contrast = ((inside - outside) / 80.0).coerceIn(-1.0, 1.0)
+        val sides = listOf(Geometry.dist(q[0], q[1]), Geometry.dist(q[1], q[2]), Geometry.dist(q[2], q[3]), Geometry.dist(q[3], q[0]))
+        val shape = if (sides.min() < 0.15 * sides.max()) -1.0 else 0.0
+        return 0.7 * contrast + 0.3 * frac.coerceAtMost(0.95) + shape
     }
 
     private fun medianOf(gray: Mat): Double {

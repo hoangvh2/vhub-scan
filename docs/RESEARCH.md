@@ -37,7 +37,7 @@
 | E8 | DIBCO dùng F-measure, pseudo-F (nhấn mạnh nét mảnh/skeleton), PSNR, DRD; nên dùng công cụ chính thức, công thức một số paper bị đảo recall/precision | V | [arXiv 2401.11831](https://arxiv.org/pdf/2401.11831) |
 | E9 | Slanted-edge SFR theo ISO 12233; công cụ mở: MTF Mapper (sai số MTF50 thường < 2% theo một người dùng), sfrmat (Burns) | V/S | [Imatest](https://www.imatest.com/docs/validating_slanted_edge) · [kasson](https://blog.kasson.com/?p=5809) |
 | E10 | Android 12+ (API 31): chế độ pixel *MAXIMUM_RESOLUTION* chỉ có trên cảm biến khai báo capability ULTRA_HIGH_RESOLUTION_SENSOR; mặc định cảm biến **binning**; có stream-config map riêng | V | [API diff 31](https://developer.android.com/sdk/api_diff/31/changes/android.hardware.camera2.CameraMetadata) |
-| E11 | Tecno Spark 30 Pro: Helio G100, 8GB, camera 108MP 1/1.52", **xuất xưởng Android 14**. Việc máy có phơi ra đầu ra 108MP/RAW hay không: **Unknown** | V/U | [GSMArena](https://m.gsmarena.com/tecno_spark_30_pro-13357.php) |
+| E11 | Tecno Spark 30 Pro theo GSMArena: Helio G100, camera 108MP 1/1.52", xuất xưởng Android 14. **Đã bị thiết bị thật phản bác một phần — xem §7.1** (máy test báo Android 15, SoC MT6789, camera sau 12MP 5.22×3.92mm) | V (thiết bị) | [GSMArena](https://m.gsmarena.com/tecno_spark_30_pro-13357.php) · §7.1 |
 | E12 | OpenCV: Apache-2.0, 91.3k★ · PdfBox-Android: Apache-2.0, 1.2k★, dựa PDFBox 2.0.27, README nói "most features implemented" (bảo trì thấp) · DocAligner: Apache-2.0, 120★, ONNX | V | [OpenCV](https://github.com/opencv/opencv) · [PdfBox-Android](https://github.com/TomRoush/PdfBox-Android) · [DocAligner](https://github.com/docsaidlab/DocAligner) |
 | E13 | ML Kit Doc Scanner: UI trọn gói, JPEG/PDF, minSdk 21, RAM ≥ 1.7GB; ML Kit Text v2 tách script, Japanese riêng, bundled ~4MB/script. Việt nằm trong Latin hay không: **chưa xác minh** | V / U | [doc scanner](https://developers.google.com/ml-kit/vision/doc-scanner/android) · [text v2](https://developers.google.com/ml-kit/vision/text-recognition/v2) |
 | E14 | PaddleOCR Apache-2.0, 3.7.0 (2026-06-11), PP-OCRv6 Trung/Anh/Nhật + 46 Latin; Việt không nêu tên | V / U | [repo](https://github.com/PaddlePaddle/PaddleOCR) |
@@ -160,6 +160,26 @@ Tôi **không có quyền truy cập thiết bị** trong phiên này, nên khô
 | Bộ nhớ | `adb shell cat /proc/meminfo`, `getprop dalvik.vm.heapgrowthlimit`, `dalvik.vm.heapsize`; `dumpsys meminfo <pkg>` khi xử lý 12/27/108MP | Giới hạn RAM native/Java, ngưỡng OOM |
 | Hiệu năng | Thời gian từng khâu, p50/p95, trên máy thật; CPU/GPU/NNAPI thực dụng được | Không suy từ desktop |
 | Nhiệt/pin | `dumpsys thermalservice`, `dumpsys batterystats --reset` → chạy 15 phút quét liên tục, độ sáng cố định, chế độ bay; nhiệt kế ngoài | Throttling của Helio G100 |
+
+### 7.1 Kết quả đo thiết bị thật (device_report, 2026-10-23) — [V] trừ khi ghi khác
+
+| Mục | Kết quả | Hệ quả |
+|---|---|---|
+| Máy/Build | `TECNO KM6`, **Android 15 (SDK 35)**, build `KM6-15.1.2.195`, patch 2026-09-05 | Android 15 xác nhận. Edge-to-edge bắt buộc → UI phải xử lý inset (đã sửa v0.1.1) |
+| SoC | `MT6789` (8 nhân), 7682MB RAM (trống ~2264MB lúc đo), memoryClass 256/512MB | **Lệch với GSMArena (Helio G100).** MT6789 thường là Helio G99 [K, chưa kiểm]. Chưa chắc "KM6" = Spark 30 Pro: cần bạn xác nhận Settings → About phone |
+| Camera sau (id 0) | pixel array **4080×3072 (12.5MP)**, cảm biến **5.22×3.92 mm**, f/1.6, tiêu cự 4.11mm, hardware level FULL | **Không có đường truy cập 108MP/1/1.52" cho app bên thứ ba** trên máy này (có thể do biến thể máy, hoặc 108MP chỉ mở cho app camera hãng). Kích thước vật lý 5.22mm không khớp 1/1.52" (~8.4mm) |
+| Độ phân giải tối đa xuất được | JPEG/YUV **4064×3048 (12.4MP)**, RAW_SENSOR 4080×3072; `MAXIMUM_RESOLUTION map: none`, không có ULTRA_HIGH_RESOLUTION_SENSOR | **Trần phần cứng cho benchmark = 12MP.** A4 ở 12MP ≈ 3048px/297mm ≈ **260 dpi lý thuyết, thực tế thấp hơn** (viền/ghép/phối cảnh). Kỳ vọng "gần photocopy 300–600 dpi" phải hạ cho tới khi có số đo |
+| Capability | MANUAL_SENSOR, MANUAL_POST_PROCESSING, **RAW**, BURST_CAPTURE (+ capability "5" = READ_SENSOR_SETTINGS [K]) | **RAW (DNG) khả dụng → đường tránh ISP sharpen/NR của hãng**; BURST cho phép chọn khung nét nhất. Cả hai là giả thuyết cần thử, chưa triển khai |
+| Chế độ ISP | EDGE: 0,1,2 (có OFF); NR: 0,1,2,3 (có OFF) | Yêu cầu tắt hợp lệ; *ISP thật có tuân thủ hay không* vẫn phải đo bằng slanted-edge |
+| AF | AF modes 0–4 có; `LENS_INFO_MINIMUM_FOCUS_DISTANCE = null` (không báo) | Không suy được khoảng lấy nét gần nhất → đo thực nghiệm ở khoảng cách A4/A5 |
+| Camera trước | 13MP, không AF | Không dùng để scan |
+
+**Phản hồi từ ảnh chụp màn hình màn hình Edit (bản 0.1.0):**
+1. **Bug UI:** Android 15 vẽ nội dung dưới thanh trạng thái → handle góc trên-trái bị đồng hồ che; handle ở sát mép khung không kéo được vì vùng chạm nằm ngoài ảnh. Đã sửa: tôn trọng inset + lề 32dp quanh ảnh.
+2. **Dò góc sai:** khung xanh ôm sát mép dưới/trái của ảnh thay vì mép giấy (nền lộn xộn, trang bị cắt ở mép trái). Đã đổi bộ dò: nhiều ứng viên + chấm điểm "giấy sáng hơn viền ngoài" thay vì chọn contour lớn nhất. **Chưa kiểm chứng** vì tôi không có ảnh gốc để chạy.
+3. **Lỗi chụp:** trang có vẻ bị cắt ở mép trái (không đủ khung). Không thuật toán nào dựng lại được phần ngoài khung → app giờ cảnh báo khi góc sát mép. Quy trình test phải chụp đủ cả trang kèm lề.
+4. Từ ảnh chụp màn hình **không thể đánh giá độ nhoè/mất nét** (ảnh bị thu nhỏ khi hiển thị) → đánh giá fidelity chỉ dùng "inspect" 1:1/gói export.
+5. **Riêng tư:** trang trong ảnh có vẻ là tài liệu y tế có thông tin cá nhân. Gói export sẽ gửi cho tôi nên **dùng tài liệu không nhạy cảm** (hoặc che thông tin) cho benchmark.
 
 Quy tắc: số **desktop** chỉ dùng cho *đo fidelity* (xác định, không phụ thuộc phần cứng); mọi số **tốc độ/RAM/pin/nhiệt** phải đo trên Spark 30 Pro.
 
@@ -321,7 +341,7 @@ Các phần "MRC/JBIG2", "CLAHE mặc định", "dewarp mặc định" của v0.
 
 | Rủi ro | Mức | Giảm thiểu |
 |---|---|---|
-| Phần cứng/ISP Spark 30 Pro giới hạn độ nét (binning, sharpen/NR cứng) → không thể "gần photocopy" | Cao [U] | §7 ngày 1; hạ kỳ vọng sớm nếu cần |
+| Phần cứng/ISP giới hạn độ nét: **đã xác nhận trần 12MP** (§7.1); sharpen/NR cứng của hãng còn chưa đo | Cao [V một phần] | Đo slanted-edge; thử RAW/burst; hạ kỳ vọng xuống "đọc rõ chữ nhỏ ở ~250 dpi" cho tới khi có số |
 | Không có reference flatbed → không chứng minh được fidelity tuyệt đối | Cao [U] | Q1; PDF nguồn + đánh giá người |
 | Metric tự lừa mình | Trung bình | §8.5 đối chứng âm/dương |
 | Dấu Việt / kanji nhỏ bị mất ở hầu hết thuật toán T2–T3 | Cao [H] | Gate 1 component integrity |

@@ -97,6 +97,10 @@ fun EditScreen(store: PageStore, id: String, onBack: () -> Unit) {
             previewBmp = withContext(Dispatchers.Default) { matToBitmap(mat) }
             if (detected != null) spec = spec.copy(corners = detected)
             status = "Drag the 4 handles onto the page corners, then Save."
+            val c = spec.corners
+            if (c.any { it < 0.012 || it > 0.988 }) {
+                status += " WARNING: a corner is at the image border - the page may be cut off. Retake with the whole page and a small margin in frame."
+            }
         } catch (t: Throwable) {
             status = "Load failed: ${t.javaClass.simpleName}: ${t.message}"
         }
@@ -236,6 +240,14 @@ private fun LabeledSlider(label: String, v: Float, range: ClosedFloatingPointRan
     Column { Text(label, style = androidx.compose.material3.MaterialTheme.typography.bodySmall); Slider(value = v, onValueChange = onChange, valueRange = range) }
 }
 
+/** Image rectangle inside a canvas of [size], fitted with a margin so handles can sit exactly on (or beyond) the image edge. */
+private fun fitRect(size: IntSize, bw: Int, bh: Int, margin: Float): androidx.compose.ui.geometry.Rect {
+    val s = minOf((size.width - 2 * margin) / bw, (size.height - 2 * margin) / bh)
+    val w = bw * s; val h = bh * s
+    val x = (size.width - w) / 2; val y = (size.height - h) / 2
+    return androidx.compose.ui.geometry.Rect(x, y, x + w, y + h)
+}
+
 /** Draggable 4-corner overlay; coordinates are normalised to the image so the display scale does not matter. */
 @Composable
 private fun CornerEditor(bmp: Bitmap, corners: DoubleArray, onChange: (DoubleArray) -> Unit) {
@@ -243,13 +255,15 @@ private fun CornerEditor(bmp: Bitmap, corners: DoubleArray, onChange: (DoubleArr
     val cb = rememberUpdatedState(onChange)
     var active by remember { mutableStateOf(-1) }
     Canvas(
-        Modifier.fillMaxSize().aspectRatio(bmp.width.toFloat() / bmp.height).pointerInput(Unit) {
+        Modifier.fillMaxSize().pointerInput(bmp) {
+            val margin = 32.dp.toPx()
             detectDragGestures(
                 onDragStart = { off ->
+                    val r = fitRect(size, bmp.width, bmp.height, margin)
                     val c = cur.value
-                    var best = -1; var bd = 90f
+                    var best = -1; var bd = 96f
                     for (i in 0 until 4) {
-                        val d = hypot(off.x - (c[i * 2] * size.width).toFloat(), off.y - (c[i * 2 + 1] * size.height).toFloat())
+                        val d = hypot(off.x - (r.left + c[i * 2] * r.width), off.y - (r.top + c[i * 2 + 1] * r.height)).toFloat()
                         if (d < bd) { bd = d; best = i }
                     }
                     active = best
@@ -259,18 +273,24 @@ private fun CornerEditor(bmp: Bitmap, corners: DoubleArray, onChange: (DoubleArr
                 onDrag = { ch, delta ->
                     if (active >= 0) {
                         ch.consume()
+                        val r = fitRect(size, bmp.width, bmp.height, margin)
                         val c = cur.value.copyOf()
-                        c[active * 2] = (c[active * 2] + delta.x / size.width).coerceIn(0.0, 1.0)
-                        c[active * 2 + 1] = (c[active * 2 + 1] + delta.y / size.height).coerceIn(0.0, 1.0)
+                        c[active * 2] = (c[active * 2] + delta.x / r.width).coerceIn(0.0, 1.0)
+                        c[active * 2 + 1] = (c[active * 2 + 1] + delta.y / r.height).coerceIn(0.0, 1.0)
                         cb.value(c)
                     }
                 },
             )
         },
     ) {
-        drawImage(bmp.asImageBitmap(), dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()))
+        val r = fitRect(IntSize(size.width.roundToInt(), size.height.roundToInt()), bmp.width, bmp.height, 32.dp.toPx())
+        drawImage(
+            bmp.asImageBitmap(),
+            dstOffset = androidx.compose.ui.unit.IntOffset(r.left.roundToInt(), r.top.roundToInt()),
+            dstSize = IntSize(r.width.roundToInt(), r.height.roundToInt()),
+        )
         val c = corners
-        val pts = (0 until 4).map { Offset((c[it * 2] * size.width).toFloat(), (c[it * 2 + 1] * size.height).toFloat()) }
+        val pts = (0 until 4).map { Offset((r.left + c[it * 2] * r.width).toFloat(), (r.top + c[it * 2 + 1] * r.height).toFloat()) }
         for (i in 0 until 4) drawLine(Color(0xFF00C853), pts[i], pts[(i + 1) % 4], strokeWidth = 4f)
         pts.forEachIndexed { i, p ->
             drawCircle(if (i == active) Color.Yellow else Color(0xFF00C853), 26f, p, style = Stroke(width = 5f))

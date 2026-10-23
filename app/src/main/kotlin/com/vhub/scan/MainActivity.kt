@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,7 +34,7 @@ class MainActivity : ComponentActivity() {
         val cvOk = OpenCVLoader.initLocal()
         setContent {
             MaterialTheme {
-                Surface(Modifier.fillMaxSize()) {
+                Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
                     if (!cvOk) {
                         Column(Modifier.padding(24.dp)) { Text("OpenCV native library failed to load.") }
                     } else {

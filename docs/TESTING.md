@@ -23,6 +23,11 @@
 - PDF không resample ảnh; JPEG q mặc định 95, 4:4:4. B&W là Flate 1-bit lossless. **Không có JBIG2.**
 - Corners **chưa xác nhận** (cảnh báo trong danh sách) nghĩa là đang dùng góc tự dò, bạn chưa bấm Save.
 
+## Lưu ý quan trọng
+- **Dùng tài liệu không nhạy cảm** (không hồ sơ y tế/CCCD/hợp đồng thật) cho mọi thứ bạn gửi lại cho tôi; gói export chứa ảnh gốc đầy đủ.
+- Chụp **cả trang kèm lề nhỏ** trong khung; trang bị cắt mép thì không có gì cứu được.
+- Máy test báo 12MP tối đa (xem `docs/RESEARCH.md` §7.1): đây là trần, không phải lỗi app.
+
 ## Giới hạn đã biết (đừng tính là lỗi)
 - Ảnh rất lớn (nếu máy xuất 108MP) có thể gây hết bộ nhớ khi render full-res: nếu xảy ra, đây là dữ kiện quý — báo lại kích thước và thông báo lỗi.
 - Preview trong app là bản thu nhỏ; chỉ "inspect" và PDF/package là full-res.
