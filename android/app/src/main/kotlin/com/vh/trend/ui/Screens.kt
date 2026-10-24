@@ -147,9 +147,9 @@ fun TrendApp(ui: UiState, on: UiActions, now: Long = System.currentTimeMillis())
                 when {
                     ui.tab == Tab.System -> SystemPane(ui, on, now, Modifier.fillMaxSize())
                     twoPane -> {
-                        ListPane(ui, on, now, Modifier.width(400.dp).fillMaxHeight())
-                        VerticalDivider(color = c.line)
                         val shown = detail ?: ui.items.firstOrNull()
+                        ListPane(ui, on, now, Modifier.width(400.dp).fillMaxHeight(), highlight = shown?.id)
+                        VerticalDivider(color = c.line)
                         if (shown != null) DetailPane(shown, ui.tab, on, onBack = null, modifier = Modifier.weight(1f))
                         else Box(Modifier.weight(1f).fillMaxHeight().background(c.surface))
                     }
@@ -163,7 +163,7 @@ fun TrendApp(ui: UiState, on: UiActions, now: Long = System.currentTimeMillis())
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ListPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier) {
+fun ListPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier, highlight: String? = ui.selectedId) {
     val c = T.c
     Column(modifier) {
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -205,7 +205,7 @@ fun ListPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier) {
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize().testTag("list")) {
-                    items(items, key = { it.id }) { ItemRow(it, it.id == ui.selectedId) { on.select(it.id) } }
+                    items(items, key = { it.id }) { ItemRow(it, it.id == highlight) { on.select(it.id) } }
                 }
             }
         }
@@ -295,7 +295,8 @@ fun DetailPane(it: Item, tab: Tab, on: UiActions, onBack: (() -> Unit)?, modifie
             )
             acts.forEachIndexed { i, (a, icon) ->
                 val on1 = i == 0 && it.userState == a.second.state
-                QuietButton(a.first, icon, emphasis = on1, modifier = Modifier.weight(1f)) { on.act(it, a.second, a.third) }
+                // Width follows the label so "Hoãn 7 ngày" stays on one line on a 360dp phone.
+                QuietButton(a.first, icon, emphasis = on1, modifier = Modifier.weight(a.first.length + 6f)) { on.act(it, a.second, a.third) }
             }
             if (it.url.startsWith("https://")) IconButton(onClick = { uri.openUri(it.url) }) { Icon(Icons.Out, "Mở trang gốc", tint = c.ink2, modifier = Modifier.size(20.dp)) }
         }

@@ -17,6 +17,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 private const val PHONE = "w411dp-h891dp-xxhdpi"
+private const val SMALL_PHONE = "w360dp-h740dp-xxhdpi"
 private const val TABLET = "w1280dp-h800dp-land-xhdpi"
 
 /** Renders every main screen with the sample data and saves a PNG per screen (app/build/screenshots). */
@@ -35,6 +36,7 @@ class ScreensTest {
     @Test @Config(qualifiers = PHONE) fun phoneTodayDark() = shot("phone-today-dark", Fixtures.ui(), dark = true)
     @Test @Config(qualifiers = PHONE) fun phoneDetail() = shot("phone-detail-light", Fixtures.ui(selected = Fixtures.snapshot.digest.first().id))
     @Test @Config(qualifiers = PHONE) fun phoneDetailDark() = shot("phone-detail-dark", Fixtures.ui(selected = Fixtures.snapshot.digest.first().id), dark = true)
+    @Test @Config(qualifiers = SMALL_PHONE) fun smallPhoneDetail() = shot("phone360-detail-light", Fixtures.ui(selected = Fixtures.snapshot.digest.first().id))
     @Test @Config(qualifiers = PHONE) fun phoneKeptFromCloud() = shot("phone-kept-cloud", Fixtures.ui(Source.Cloud, Tab.Kept, pending = 2))
     @Test @Config(qualifiers = PHONE) fun phoneSystem() = shot("phone-system-dark", Fixtures.ui(tab = Tab.System), dark = true)
     @Test @Config(qualifiers = PHONE) fun phoneOffline() = shot("phone-offline-cache", Fixtures.ui(Source.Cache, error = "Đang xem bản lưu trên điện thoại; không thấy PC trong mạng này."))

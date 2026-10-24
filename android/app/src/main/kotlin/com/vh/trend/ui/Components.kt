@@ -169,9 +169,9 @@ fun QuietButton(label: String, icon: ImageVector? = null, emphasis: Boolean = fa
         onClick = onClick, modifier = modifier, shape = RoundedCornerShape(7.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, if (emphasis) c.pos else c.line2),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = if (emphasis) c.posSoft else c.raised, contentColor = if (emphasis) c.pos else c.ink),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp),
     ) {
         icon?.let { Icon(it, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)) }
-        Text(label, style = MaterialTheme.typography.labelLarge)
+        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
     }
 }
