@@ -3,10 +3,12 @@ import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildDeps, ensureToken, loadHomeConfig, resolveHome } from "./app.js";
+import { defaultConfig, type Config } from "./config.js";
 import { ClaudeCliAdapter } from "./llm/claudeCli.js";
 import { USER_ACTIONS, systemClock, type UserAction } from "./model.js";
 import { runPipeline } from "./pipeline.js";
 import { createApp } from "./server.js";
+import { checkConfig, initGuide, probeCommand } from "./setup.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -27,17 +29,29 @@ function parseArgs(argv: string[]): { cmd: string; pos: string[]; flags: Map<str
   return { cmd, pos, flags };
 }
 
-const HELP = `trend: personal idea scanner (PC-first)
+const HELP = `VHub Trend Scan: quét ý tưởng công cụ đáng làm, chạy trên PC
 
-  trend init [--home DIR]           create the data folder, a config and an access token
-  trend doctor [--llm]              check Node, Claude CLI, GitHub token; --llm makes one tiny real call
-  trend run                         collect, filter, analyse, build today's digest
-  trend serve [--lan] [--port N]    local dashboard + API (loopback only unless --lan)
-  trend feedback <id> <action>      ${USER_ACTIONS.join(" | ")}
-  trend status                      last run and today's token use
-  trend schedule                    print how to run it every day on this OS
+Lần đầu, chạy theo thứ tự (trong thư mục repo):
+  npm ci                  cài thư viện
+  npm run setup           build + tạo ~/.vhub-trend/config.json, rồi in hướng dẫn sửa config
+  npm run doctor          kiểm tra config, GITHUB_TOKEN, Claude CLI; báo đúng chỗ cần sửa
+  npm run scan            quét và phân tích (một lần chạy đầy đủ)
+  npm run dashboard       mở dashboard trên máy này
 
-Data lives in --home, or $VHUB_TREND_HOME, or ~/.vhub-trend. Set GITHUB_TOKEN for a higher GitHub rate limit.`;
+Hằng ngày:
+  npm run scan            hoặc đặt lịch tự chạy: npm run schedule
+  npm run status          lần chạy gần nhất, token đã dùng hôm nay
+
+Lệnh đầy đủ (npm run trend -- <lệnh>, hoặc node packages/pipeline/dist/cli.js <lệnh>):
+  init [--home DIR]           tạo thư mục dữ liệu, config, token; in hướng dẫn
+  doctor [--llm]              kiểm tra; --llm gọi thử Claude một lần rất nhỏ
+  run                         thu thập, lọc, phân tích, làm digest hôm nay
+  serve [--lan] [--port N]    dashboard + API (chỉ máy này, trừ khi có --lan)
+  feedback <id> <action>      ${USER_ACTIONS.join(" | ")}
+  status                      lần chạy gần nhất và token hôm nay
+  schedule                    in lệnh đặt lịch chạy hằng ngày cho hệ điều hành này
+
+Dữ liệu nằm ở --home, hoặc $VHUB_TREND_HOME, hoặc ~/.vhub-trend.`;
 
 async function main(): Promise<number> {
   const { cmd, pos, flags } = parseArgs(process.argv.slice(2));
@@ -46,46 +60,89 @@ async function main(): Promise<number> {
   switch (cmd) {
     case "init": {
       mkdirSync(home.dir, { recursive: true });
-      if (!existsSync(home.configFile)) copyFileSync(join(here, "..", "config.example.json"), home.configFile);
+      const created = !existsSync(home.configFile);
+      if (created) copyFileSync(join(here, "..", "config.example.json"), home.configFile);
       ensureToken(home);
-      console.log(`Ready: ${home.dir}\nEdit ${home.configFile} (topics, seeds, your projects), then run: trend doctor`);
+      console.log(initGuide(home, created, { os: process.platform, githubToken: !!process.env.GITHUB_TOKEN }));
       return 0;
     }
     case "doctor": {
-      const cfg = loadHomeConfig(home);
+      const fails: string[] = [];
+      const line = (level: "ok" | "warn" | "fail", msg: string, fix?: string) => {
+        console.log(`${level === "ok" ? "[ok]      " : level === "warn" ? "[nên sửa] " : "[LỖI]     "}${msg}`);
+        if (fix) console.log(`           cách sửa: ${fix}`);
+        if (level === "fail") fails.push(msg);
+      };
       const major = Number(process.versions.node.split(".")[0]);
       const minor = Number(process.versions.node.split(".")[1]);
       const nodeOk = major > 22 || (major === 22 && minor >= 13);
-      console.log(`${nodeOk ? "ok  " : "FAIL"} Node ${process.versions.node} (needs >= 22.13)`);
-      console.log(`${process.env.GITHUB_TOKEN ? "ok  " : "warn"} GITHUB_TOKEN ${process.env.GITHUB_TOKEN ? "set" : "not set: GitHub allows only 60 requests/hour and 10 searches/minute without it"}`);
-      console.log(`${existsSync(home.configFile) ? "ok  " : "warn"} config ${existsSync(home.configFile) ? home.configFile : "missing, defaults in use (run trend init)"}`);
-      if (cfg.llm.kind === "claude-cli" && flags.get("llm")) {
-        const a = new ClaudeCliAdapter({ command: cfg.llm.command, timeoutMs: 30_000 });
+      line(nodeOk ? "ok" : "fail", `Node ${process.versions.node} (cần >= 22.13)`, nodeOk ? undefined : "cài Node 22 LTS mới nhất từ https://nodejs.org");
+      let cfg: Config | null = null;
+      if (!existsSync(home.configFile)) {
+        line("fail", `chưa có config ${home.configFile}`, "chạy: npm run setup");
+      } else {
         try {
-          const r = await a.call({
-            system: "Reply with JSON only.",
-            user: "Return {\"ok\":true}",
-            schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] },
-            model: cfg.llm.triageModel,
-            stage: "triage",
-            promptVersion: "doctor",
-            expectedOutTokens: 20,
-            effort: cfg.llm.triageEffort,
-          });
-          console.log(`ok   Claude CLI answered (${r.usage.inTokens} in / ${r.usage.outTokens} out tokens, fixed overhead included)`);
+          cfg = loadHomeConfig(home);
+          const issues = checkConfig(cfg);
+          if (!issues.length) line("ok", `config ${home.configFile}`);
+          for (const i of issues) line(i.level, `config ${i.field}: ${i.problem}`, `${i.fix} (trong ${home.configFile})`);
         } catch (e) {
-          console.log(`FAIL Claude CLI: ${e instanceof Error ? e.message : e}`);
-          return 1;
+          line("fail", `config đọc không được: ${e instanceof Error ? e.message : e}`, "mở file, sửa đúng chỗ báo lỗi. Muốn làm lại từ đầu: xoá file đó rồi chạy npm run setup");
         }
       }
-      return nodeOk ? 0 : 1;
+      line(
+        process.env.GITHUB_TOKEN ? "ok" : "warn",
+        process.env.GITHUB_TOKEN ? "GITHUB_TOKEN đã đặt" : "chưa đặt GITHUB_TOKEN: GitHub chỉ cho 60 request/giờ, lần chạy dễ thiếu dữ liệu",
+        process.env.GITHUB_TOKEN ? undefined : "xem BƯỚC 2 trong hướng dẫn của: npm run setup",
+      );
+      const llm = cfg?.llm ?? defaultConfig.llm;
+      if (llm.kind === "claude-cli") {
+        const probe = probeCommand(llm.command);
+        if (!probe.ok) {
+          line("fail", `không chạy được Claude CLI "${llm.command}": ${probe.reason}`, "cài Claude Code (https://claude.com/claude-code), gõ  claude  một lần để đăng nhập. Đã cài mà vẫn lỗi: ghi đường dẫn đầy đủ vào llm.command trong config");
+        } else if (!flags.get("llm")) {
+          line("ok", `Claude CLI ${probe.version} (chưa thử gọi thật; chạy  npm run doctor  để thử)`);
+        } else {
+          const a = new ClaudeCliAdapter({ command: llm.command, timeoutMs: 60_000 });
+          try {
+            const r = await a.call({
+              system: "Reply with JSON only.",
+              user: "Return {\"ok\":true}",
+              schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] },
+              model: llm.triageModel,
+              stage: "triage",
+              promptVersion: "doctor",
+              expectedOutTokens: 20,
+              effort: llm.triageEffort,
+            });
+            line("ok", `Claude CLI ${probe.version} trả lời được (${r.usage.inTokens} token vào / ${r.usage.outTokens} ra)`);
+          } catch (e) {
+            line("fail", `Claude CLI không trả lời: ${e instanceof Error ? e.message : e}`, "gõ  claude  trong terminal, đăng nhập nếu được hỏi, rồi chạy lại npm run doctor");
+          }
+        }
+      }
+      console.log("");
+      if (fails.length) {
+        console.log(`Còn ${fails.length} lỗi phải sửa (dòng [LỖI] ở trên). Sửa xong chạy lại:  npm run doctor`);
+        return 1;
+      }
+      console.log("Sẵn sàng. Bước tiếp theo:  npm run scan   (quét ý tưởng, vài phút)");
+      console.log("Sau đó:                    npm run dashboard   (mở link nó in ra trong trình duyệt)");
+      return 0;
     }
     case "run": {
       const cfg = loadHomeConfig(home);
+      const blocking = checkConfig(cfg).filter((i) => i.level === "fail");
+      if (blocking.length) {
+        for (const i of blocking) console.error(`[LỖI] config ${i.field}: ${i.problem}. Cách sửa: ${i.fix}`);
+        console.error(`Sửa trong ${home.configFile}, rồi chạy:  npm run doctor`);
+        return 1;
+      }
       const { deps, db } = buildDeps(home, cfg);
       try {
         const st = await runPipeline(deps);
         console.log(JSON.stringify(st, null, 2));
+        console.log("\nXem kết quả:  npm run dashboard");
         return st.sourceErrors.length || st.degraded.length ? 2 : 0;
       } finally {
         db.close();
