@@ -165,6 +165,7 @@ async function main(): Promise<number> {
       });
       await new Promise<void>((r) => app.listen(port, host, r));
       console.log(`Dashboard: http://${host === "0.0.0.0" ? "<this PC's LAN address>" : "localhost"}:${port}/?t=${token}`);
+      console.log("Mở link trên trong trình duyệt. Giữ cửa sổ này mở; bấm Ctrl+C để tắt dashboard.");
       if (host === "0.0.0.0") console.log("LAN mode: anyone on your network with this link can read and change your list. Keep the token private.");
       return await new Promise<number>(() => undefined);
     }

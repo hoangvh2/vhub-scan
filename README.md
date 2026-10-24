@@ -10,7 +10,7 @@ It does **not** touch Facebook. Facebook is where you find people; this finds th
 |---|---|
 | Pipeline: collect, dedupe, rules, score, triage, card, digest, checkpoints, token budget | Built, 82 automated tests pass |
 | Claude CLI adapter | Verified against the real `claude` CLI 2.1.310 (see `docs/DESIGN.md`, "Measured") |
-| GitHub and Hacker News connectors | Built and tested **against recorded-shape fixtures only**: the build sandbox cannot reach those APIs. First live run is yours (`npm run doctor`, `npm run scan`) |
+| GitHub and Hacker News connectors | Built and tested against recorded-shape fixtures. GitHub: one live run from the build sandbox on 2026-10-24 (no token, 89 items collected, 5 in the digest). Hacker News: **not yet run live** (the sandbox blocks it); first live run is yours (`npm run scan`) |
 | Local web dashboard (`npm run dashboard`) | Built, API tested; the page itself has not been opened in a browser by me |
 | Android app, APK release in CI | **Not built yet** |
 | Terraform / Firebase / cloud sync | **Not built yet** (cloud is optional, after the MVP) |
