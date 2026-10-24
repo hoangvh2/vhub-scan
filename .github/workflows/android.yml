@@ -100,6 +100,33 @@ jobs:
             android/core/build/reports/
           if-no-files-found: ignore
 
+  screens:
+    name: Publish screenshots to a browsable branch
+    needs: build
+    # Artifacts are zips; this keeps the latest PNGs viewable in the browser (and on a phone) at
+    # https://github.com/<repo>/tree/android-screenshots. Separate job so Gradle never runs with a write token.
+    if: always() && needs.build.result != 'cancelled' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-screenshots
+          path: shots
+      - name: Push to the android-screenshots branch
+        env:
+          REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          cd shots
+          { echo "# Android screenshots"; echo; echo "Branch \`$REF\`, commit ${GITHUB_SHA::7}, run ${GITHUB_RUN_NUMBER}."; echo;
+            for f in *.png; do echo "## ${f%.png}"; echo; echo "<img src=\"$f\" width=\"360\">"; echo; done; } > README.md
+          git init -q -b android-screenshots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Screenshots for ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" android-screenshots
+
   release:
     name: Publish APK
     needs: build
