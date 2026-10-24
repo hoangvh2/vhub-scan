@@ -14,6 +14,13 @@ describe("config", () => {
     expect(() => parseConfig('{"budget":{"dailyTokens":"many"}}')).toThrow(/expected number/);
     expect(() => parseConfig('{"scope":{"include":"productivity"}}')).toThrow(/expected an array/);
   });
+  it("ignores note keys starting with _ at any level, so the example can explain itself", () => {
+    const c = parseConfig('{"_huong_dan":["x"],"budget":{"_huong_dan":"y","dailyTokens":5}}');
+    expect(c.budget.dailyTokens).toBe(5);
+  });
+  it("explains invalid JSON and names the file", () => {
+    expect(() => parseConfig('{"budget":{"dailyTokens":5,}}')).toThrow(/JSON hợp lệ.*dấu phẩy/);
+  });
   it("the shipped example is valid", () => {
     const c = parseConfig(readFileSync(new URL("../config.example.json", import.meta.url), "utf8"));
     expect(c.projects.length).toBeGreaterThan(0);

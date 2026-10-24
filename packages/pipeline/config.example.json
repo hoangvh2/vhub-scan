@@ -1,14 +1,23 @@
 {
+  "_huong_dan": [
+    "File này là config của VHub Trend Scan. Các dòng bắt đầu bằng \"_huong_dan\" chỉ là ghi chú, chương trình bỏ qua.",
+    "BẮT BUỘC: sửa mọi chỗ có chữ TODO: trong \"projects\" bên dưới.",
+    "Mục nào không có trong file thì dùng giá trị mặc định (xem packages/pipeline/src/config.ts).",
+    "Sửa xong, chạy: npm run doctor"
+  ],
+  "projects": [
+    { "name": "VH Flow", "summary": "TODO: thay bằng 1–2 câu: VH Flow làm gì, cho ai. Ví dụ: App quản lý việc hằng ngày cho team nhỏ" },
+    { "name": "VH Studio", "summary": "TODO: thay bằng 1–2 câu: VH Studio làm gì, cho ai" }
+  ],
+  "_huong_dan_projects": "BẮT BUỘC. Dự án của bạn. Claude dùng mô tả này để gợi ý cách áp dụng mỗi ý tưởng vào đúng dự án. Không muốn khai dự án nào thì xoá cả khối { ... } của nó (nhớ xoá luôn dấu phẩy thừa).",
   "scope": {
+    "_huong_dan": "Không bắt buộc. focus = 1 đoạn mô tả loại ý tưởng bạn muốn, đưa cho Claude làm tiêu chí chấm. blockAuthors = tên tài khoản GitHub không muốn thấy nữa, ví dụ [\"spam-user\"].",
     "blockAuthors": [],
     "focus": "Tools that help one person work or live better (productivity, automation, personal organisation, developer workflow). Skip anything centred on image, video, 3D, or deep technical systems that are unwise to vibe-code."
   },
-  "projects": [
-    { "name": "VH Flow", "summary": "Replace with one or two sentences describing what this project does." },
-    { "name": "VH Studio", "summary": "Replace with one or two sentences describing what this project does." }
-  ],
   "sources": {
     "github": {
+      "_huong_dan": "Không bắt buộc. seeds = tên tài khoản GitHub bạn muốn theo dõi (người hoặc tổ chức), ví dụ [\"anthropics\", \"simonw\"]. queries = cú pháp tìm kiếm của GitHub; {d14} nghĩa là 14 ngày trước.",
       "enabled": true,
       "queries": [
         "topic:claude-code created:>{d14} stars:>=3",
@@ -21,7 +30,16 @@
     },
     "hn": { "enabled": true, "maxItems": 60 }
   },
-  "llm": { "kind": "claude-cli", "command": "claude", "triageModel": "haiku", "cardModel": "sonnet", "triageEffort": "low", "cardEffort": "low", "timeoutMs": 180000 },
-  "budget": { "dailyTokens": 60000 },
-  "server": { "port": 4173 }
+  "llm": {
+    "_huong_dan": "Không cần sửa. command = lệnh chạy Claude CLI (nếu doctor báo không tìm thấy \"claude\", ghi đường dẫn đầy đủ tới nó ở đây).",
+    "kind": "claude-cli",
+    "command": "claude",
+    "triageModel": "haiku",
+    "cardModel": "sonnet",
+    "triageEffort": "low",
+    "cardEffort": "low",
+    "timeoutMs": 180000
+  },
+  "budget": { "_huong_dan": "Số token tối đa mỗi ngày. Hết thì lần chạy dừng gọi Claude, phần còn lại để hôm sau.", "dailyTokens": 60000 },
+  "server": { "_huong_dan": "Cổng của dashboard: http://localhost:4173", "port": 4173 }
 }

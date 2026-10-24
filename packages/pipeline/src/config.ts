@@ -94,6 +94,8 @@ function merge<T>(base: T, over: unknown, path = ""): T {
     if (!isObj(over)) throw new Error(`config ${path || "(root)"}: expected an object`);
     const out: Json = { ...base };
     for (const [k, v] of Object.entries(over)) {
+      // Keys starting with "_" are notes for the person editing the file (JSON has no comments).
+      if (k.startsWith("_")) continue;
       if (!(k in base)) throw new Error(`config: unknown key "${path}${k}"`);
       out[k] = merge((base as Json)[k], v, `${path}${k}.`);
     }
@@ -108,10 +110,20 @@ function merge<T>(base: T, over: unknown, path = ""): T {
 }
 
 export function parseConfig(json: string): Config {
-  return merge(defaultConfig, JSON.parse(json));
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch (e) {
+    throw new Error(`config không phải JSON hợp lệ (${e instanceof Error ? e.message : e}). Hay gặp: thiếu dấu phẩy giữa hai mục, thừa dấu phẩy sau mục cuối, hoặc dùng dấu nháy đơn thay vì nháy kép`);
+  }
+  return merge(defaultConfig, raw);
 }
 
 export function loadConfig(file: string | null): Config {
   if (!file) return defaultConfig;
-  return parseConfig(readFileSync(file, "utf8"));
+  try {
+    return parseConfig(readFileSync(file, "utf8"));
+  } catch (e) {
+    throw new Error(`${file}: ${e instanceof Error ? e.message : e}`);
+  }
 }
