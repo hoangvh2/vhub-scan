@@ -17,6 +17,8 @@ beforeAll(async () => {
   const app = createApp({
     db: r.db, store: r.store, budget: r.deps.budget, token: TOKEN, clock: r.clock,
     runNow: async () => (ranNow++ === 0 ? { started: true } : { started: false, reason: "already running" }),
+    pair: () => ({ code: "{}", svg: "<svg/>", lan: ["http://192.168.1.5:4173"], cloud: false, lanReachable: true, expiresAt: "2026-10-24T02:00:00.000Z" }),
+    extraHealth: () => ({ cloud: null, lan: true }),
   });
   await new Promise<void>((ok) => app.listen(0, "127.0.0.1", ok));
   base = `http://127.0.0.1:${(app.address() as AddressInfo).port}`;
@@ -74,5 +76,16 @@ describe("local API", () => {
     expect(h.tokens.calls).toBe(2);
     expect((await post("/api/run", {})).status).toBe(202);
     expect((await post("/api/run", {})).status).toBe(409);
+  });
+  it("serves the phone snapshot and the pairing code, both behind the token", async () => {
+    const s = (await (await get("/api/snapshot")).json()) as { schema: number; digest: { series: number[] }[]; health: { counts: Record<string, number> } };
+    expect(s.schema).toBe(1);
+    expect(s.digest[0]!.series.length).toBeGreaterThan(0);
+    expect(s.health.counts).toHaveProperty("kept");
+    const p = (await (await get("/api/pair")).json()) as { lan: string[]; lanReachable: boolean };
+    expect(p).toMatchObject({ lan: ["http://192.168.1.5:4173"], lanReachable: true });
+    expect((await fetch(base + "/api/pair")).status).toBe(401);
+    expect((await fetch(base + "/api/snapshot")).status).toBe(401);
+    expect(((await (await get("/api/health")).json()) as { lan: boolean }).lan).toBe(true);
   });
 });

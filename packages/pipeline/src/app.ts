@@ -2,6 +2,10 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { loadCloudConfig, type CloudConfig } from "./cloud/config.js";
+import { FirestoreRest } from "./cloud/firestore.js";
+import { ServiceAccountAuth } from "./cloud/google.js";
+import { syncOnce, type SyncResult } from "./cloud/sync.js";
 import { loadConfig, type Config } from "./config.js";
 import { Db } from "./db.js";
 import { ClaudeCliAdapter } from "./llm/claudeCli.js";
@@ -20,11 +24,12 @@ export interface Home {
   configFile: string;
   dbFile: string;
   tokenFile: string;
+  cloudFile: string;
 }
 
 export function resolveHome(arg?: string): Home {
   const dir = arg ?? process.env.VHUB_TREND_HOME ?? join(homedir(), ".vhub-trend");
-  return { dir, configFile: join(dir, "config.json"), dbFile: join(dir, "trend.sqlite"), tokenFile: join(dir, "token") };
+  return { dir, configFile: join(dir, "config.json"), dbFile: join(dir, "trend.sqlite"), tokenFile: join(dir, "token"), cloudFile: join(dir, "cloud.json") };
 }
 
 export function ensureToken(h: Home): string {
@@ -59,4 +64,19 @@ export function buildDeps(h: Home, cfg: Config, opts: { adapter?: LlmAdapter; lo
   const github = new GitHubSource({ cfg: cfg.sources.github, token });
   const hn = (last: number) => new HackerNewsSource({ cfg: cfg.sources.hn, lastMaxId: last });
   return { deps: { cfg, db, store, llm, budget, clock: systemClock, github, hn, log: opts.log }, db, store, budget };
+}
+
+export interface Cloud {
+  cfg: CloudConfig;
+  docs: FirestoreRest;
+  sync: () => Promise<SyncResult>;
+}
+
+/** Cloud sync when ~/.vhub-trend/cloud.json exists (`npm run cloud:connect`), otherwise null: the app stays PC-only. */
+export function buildCloud(h: Home, d: { db: Db; store: Store; budget: Budget; log?: (m: string) => void }): Cloud | null {
+  const cfg = loadCloudConfig(h.cloudFile);
+  if (!cfg) return null;
+  const auth = new ServiceAccountAuth(cfg);
+  const docs = new FirestoreRest({ projectId: cfg.projectId, token: () => auth.token(), baseUrl: cfg.firestoreUrl });
+  return { cfg, docs, sync: () => syncOnce({ ...d, docs, uid: cfg.uid, clock: systemClock }) };
 }

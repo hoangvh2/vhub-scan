@@ -1,0 +1,217 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-10-24T01:00:00.000Z",
+  "day": "2026-10-24",
+  "digest": [
+    {
+      "id": "url:habito.example.com",
+      "title": "Habito",
+      "description": "a habit tracker and calendar assistant for busy people",
+      "url": "https://habito.example.com",
+      "author": "bob",
+      "license": null,
+      "topics": [
+        "show-hn"
+      ],
+      "stage": "carded",
+      "userState": "new",
+      "triage": {
+        "score": 3,
+        "cat": "work-tool",
+        "why": "huu ich cho cong viec"
+      },
+      "heuristic": 8.112146339216448,
+      "card": {
+        "what": "Cong cu giup lam viec.",
+        "learn": "Cach dong goi quy trinh.",
+        "apply": [
+          {
+            "project": "VH Flow",
+            "how": "Thu mot quy trinh tuong tu."
+          }
+        ],
+        "effort": "S",
+        "risk": "Kiem tra giay phep."
+      },
+      "stars": null,
+      "points": 30,
+      "sources": [
+        "hn"
+      ],
+      "firstSeen": "2026-10-24T01:00:00.000Z",
+      "shownAt": "2026-10-24T01:00:00.000Z",
+      "shownReason": "điểm 3",
+      "series": [
+        30
+      ]
+    },
+    {
+      "id": "github:acme/taskflow",
+      "title": "acme/taskflow",
+      "description": "A command line assistant that plans your week, tracks habits and automates repetitive daily workflow tasks",
+      "url": "https://github.com/acme/taskflow",
+      "author": "acme",
+      "license": "MIT",
+      "topics": [
+        "productivity"
+      ],
+      "stage": "carded",
+      "userState": "new",
+      "triage": {
+        "score": 3,
+        "cat": "work-tool",
+        "why": "huu ich cho cong viec"
+      },
+      "heuristic": 6.141775961183516,
+      "card": {
+        "what": "Cong cu giup lam viec.",
+        "learn": "Cach dong goi quy trinh.",
+        "apply": [
+          {
+            "project": "VH Flow",
+            "how": "Thu mot quy trinh tuong tu."
+          }
+        ],
+        "effort": "S",
+        "risk": "Kiem tra giay phep."
+      },
+      "stars": 40,
+      "points": 55,
+      "sources": [
+        "github",
+        "hn"
+      ],
+      "firstSeen": "2026-10-24T01:00:00.000Z",
+      "shownAt": "2026-10-24T01:00:00.000Z",
+      "shownReason": "điểm 3",
+      "series": [
+        40
+      ]
+    },
+    {
+      "id": "github:lifehub/planner",
+      "title": "lifehub/planner",
+      "description": "A calendar assistant for personal life: reminders, budget and a weekly planner you own",
+      "url": "https://github.com/lifehub/planner",
+      "author": "lifehub",
+      "license": "MIT",
+      "topics": [
+        "productivity",
+        "calendar"
+      ],
+      "stage": "carded",
+      "userState": "kept",
+      "triage": {
+        "score": 3,
+        "cat": "work-tool",
+        "why": "huu ich cho cong viec"
+      },
+      "heuristic": 5.00586343755427,
+      "card": {
+        "what": "Cong cu giup lam viec.",
+        "learn": "Cach dong goi quy trinh.",
+        "apply": [
+          {
+            "project": "VH Flow",
+            "how": "Thu mot quy trinh tuong tu."
+          }
+        ],
+        "effort": "S",
+        "risk": "Kiem tra giay phep."
+      },
+      "stars": 25,
+      "points": null,
+      "sources": [
+        "github"
+      ],
+      "firstSeen": "2026-10-24T01:00:00.000Z",
+      "shownAt": "2026-10-24T01:00:00.000Z",
+      "shownReason": "điểm 3",
+      "series": [
+        25
+      ]
+    }
+  ],
+  "kept": [
+    {
+      "id": "github:lifehub/planner",
+      "title": "lifehub/planner",
+      "description": "A calendar assistant for personal life: reminders, budget and a weekly planner you own",
+      "url": "https://github.com/lifehub/planner",
+      "author": "lifehub",
+      "license": "MIT",
+      "topics": [
+        "productivity",
+        "calendar"
+      ],
+      "stage": "carded",
+      "userState": "kept",
+      "triage": {
+        "score": 3,
+        "cat": "work-tool",
+        "why": "huu ich cho cong viec"
+      },
+      "heuristic": 5.00586343755427,
+      "card": {
+        "what": "Cong cu giup lam viec.",
+        "learn": "Cach dong goi quy trinh.",
+        "apply": [
+          {
+            "project": "VH Flow",
+            "how": "Thu mot quy trinh tuong tu."
+          }
+        ],
+        "effort": "S",
+        "risk": "Kiem tra giay phep."
+      },
+      "stars": 25,
+      "points": null,
+      "sources": [
+        "github"
+      ],
+      "firstSeen": "2026-10-24T01:00:00.000Z",
+      "shownAt": "2026-10-24T01:00:00.000Z",
+      "series": [
+        25
+      ]
+    }
+  ],
+  "explore": [],
+  "health": {
+    "lastRun": {
+      "startedAt": "2026-10-24T01:00:00.000Z",
+      "finishedAt": "2026-10-24T01:00:00.000Z",
+      "status": "ok",
+      "error": null,
+      "collected": 9,
+      "created": 6,
+      "merged": 1,
+      "triaged": 3,
+      "carded": 3,
+      "digest": 3,
+      "llmCalls": 2,
+      "cacheHits": 0,
+      "dropped": {
+        "out_of_scope": 1,
+        "thin": 1,
+        "old": 1
+      },
+      "degraded": [],
+      "sourceErrors": []
+    },
+    "tokens": {
+      "used": 8146,
+      "limit": 60000,
+      "calls": 2,
+      "costUsd": 0
+    },
+    "counts": {
+      "new": 2,
+      "kept": 1,
+      "skipped": 0,
+      "snoozed": 0,
+      "trying": 0,
+      "done": 0
+    }
+  }
+}

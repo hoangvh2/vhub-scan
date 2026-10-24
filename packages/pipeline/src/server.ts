@@ -7,6 +7,7 @@ import type { Db } from "./db.js";
 import type { Budget } from "./llm/budget.js";
 import { USER_ACTIONS, systemClock, type Clock, type UserAction } from "./model.js";
 import type { Store } from "./store.js";
+import { buildSnapshot } from "./snapshot.js";
 import { digestFor, health, listEntities, toView } from "./views.js";
 
 export interface ServerOptions {
@@ -18,6 +19,10 @@ export interface ServerOptions {
   /** Starts a pipeline run in the background; resolves when it has been started (not finished). */
   runNow?: () => Promise<{ started: boolean; reason?: string }>;
   webDir?: string;
+  /** Pairing code for the phone (fresh custom token on each call). Unset = pairing not offered. */
+  pair?: () => { code: string; svg: string; lan: string[]; cloud: boolean; lanReachable: boolean; expiresAt: string };
+  /** Extra fields for /api/health (sync status). */
+  extraHealth?: () => Record<string, unknown>;
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -76,7 +81,12 @@ export function createApp(o: ServerOptions): Server {
         if (!url.pathname.startsWith("/api/")) return send(res, 404, { error: "not found" });
         if (!authorised(req, url, o.token)) return send(res, 401, { error: "unauthorised" });
 
-        if (req.method === "GET" && url.pathname === "/api/health") return send(res, 200, health(o.db, o.budget, clock.now()));
+        if (req.method === "GET" && url.pathname === "/api/health") return send(res, 200, { ...(health(o.db, o.budget, clock.now()) as object), ...(o.extraHealth?.() ?? {}) });
+        if (req.method === "GET" && url.pathname === "/api/snapshot") return send(res, 200, buildSnapshot(o.db, o.store, o.budget, clock.now(), { maxBytes: Infinity }));
+        if (req.method === "GET" && url.pathname === "/api/pair") {
+          if (!o.pair) return send(res, 501, { error: "not available" });
+          return send(res, 200, o.pair());
+        }
         if (req.method === "GET" && url.pathname === "/api/digest") return send(res, 200, digestFor(o.db, o.store, url.searchParams.get("day") ?? undefined));
         if (req.method === "GET" && url.pathname === "/api/entities") {
           return send(res, 200, {

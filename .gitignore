@@ -9,3 +9,10 @@ data/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+# Terraform: state holds the PC key and the API key; tfvars holds your project id
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
