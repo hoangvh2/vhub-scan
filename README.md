@@ -1,6 +1,6 @@
 # VHub Trend Scan
 
-A personal, **PC-first** pipeline that finds small tools and ideas worth building (productivity, automation, daily life, developer workflow), narrows hundreds of items to a handful, explains each in Vietnamese, and shows them on a local dashboard (web now, Android next).
+A personal, **PC-first** pipeline that finds small tools and ideas worth building (productivity, automation, daily life, developer workflow), narrows hundreds of items to a handful, explains each in Vietnamese, and shows them on a local dashboard (web and Android).
 
 It does **not** touch Facebook. Facebook is where you find people; this finds their public projects (GitHub, Show HN) on its own, so it keeps working when you are busy.
 
@@ -11,8 +11,8 @@ It does **not** touch Facebook. Facebook is where you find people; this finds th
 | Pipeline: collect, dedupe, rules, score, triage, card, digest, checkpoints, token budget | Built, 82 automated tests pass |
 | Claude CLI adapter | Verified against the real `claude` CLI 2.1.310 (see `docs/DESIGN.md`, "Measured") |
 | GitHub and Hacker News connectors | Built and tested against recorded-shape fixtures. GitHub: one live run from the build sandbox on 2026-10-24 (no token, 89 items collected, 5 in the digest). Hacker News: **not yet run live** (the sandbox blocks it); first live run is yours (`npm run scan`) |
-| Local web dashboard (`npm run dashboard`) | Built, API tested; the page itself has not been opened in a browser by me |
-| Android app, APK release in CI | **Not built yet** |
+| Local web dashboard (`npm run dashboard`) | Built, API tested; rendered in headless Chromium at desktop, tablet and phone sizes, light and dark (CI artifact `dashboard-screens`). Not checked on Safari/iOS |
+| Android app (Compose, LAN + Firestore, offline queue), APK signed in CI | Built (MVP). Core and UI tested in CI (JVM + Robolectric screenshots), release APK signature verified with `apksigner`. **Not yet installed on a real phone.** Guide: [`android/README.md`](android/README.md) |
 | Cloud sync for the phone: Terraform (Firebase Spark, free), Firestore rules, PC sync, pairing code | Built. `terraform plan` without credentials, rules and PC↔phone sync tested in CI against the Firebase emulators. **Not yet applied to a real Google project** (your first `terraform apply`). Guide: [`infra/README.md`](infra/README.md), design: [`docs/SYNC.md`](docs/SYNC.md) |
 | Scheduling on Windows | Command printed by `trend schedule`; **not verified on a real Windows PC** |
 
