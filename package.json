@@ -7,12 +7,12 @@
   "engines": { "node": ">=22.13" },
   "scripts": {
     "setup": "npm run build && node packages/pipeline/dist/cli.js init",
-    "doctor": "node packages/pipeline/dist/cli.js doctor --llm",
-    "scan": "node packages/pipeline/dist/cli.js run",
-    "dashboard": "node packages/pipeline/dist/cli.js serve",
-    "status": "node packages/pipeline/dist/cli.js status",
-    "schedule": "node packages/pipeline/dist/cli.js schedule",
-    "trend": "node packages/pipeline/dist/cli.js",
+    "doctor": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js doctor --llm",
+    "scan": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js run",
+    "dashboard": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js serve",
+    "status": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js status",
+    "schedule": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js schedule",
+    "trend": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js",
     "typecheck": "npm run typecheck -w @vhub/trend-pipeline",
     "test": "npm test -w @vhub/trend-pipeline",
     "build": "npm run build -w @vhub/trend-pipeline"

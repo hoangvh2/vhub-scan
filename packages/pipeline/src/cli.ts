@@ -8,7 +8,7 @@ import { ClaudeCliAdapter } from "./llm/claudeCli.js";
 import { USER_ACTIONS, systemClock, type UserAction } from "./model.js";
 import { runPipeline } from "./pipeline.js";
 import { createApp } from "./server.js";
-import { checkConfig, initGuide, probeCommand } from "./setup.js";
+import { checkConfig, checkGithubToken, initGuide, probeCommand, runSummary } from "./setup.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -45,7 +45,7 @@ Hằng ngày:
 Lệnh đầy đủ (npm run trend -- <lệnh>, hoặc node packages/pipeline/dist/cli.js <lệnh>):
   init [--home DIR]           tạo thư mục dữ liệu, config, token; in hướng dẫn
   doctor [--llm]              kiểm tra; --llm gọi thử Claude một lần rất nhỏ
-  run                         thu thập, lọc, phân tích, làm digest hôm nay
+  run [--json]                thu thập, lọc, phân tích, làm digest hôm nay; --json in số liệu thô
   serve [--lan] [--port N]    dashboard + API (chỉ máy này, trừ khi có --lan)
   feedback <id> <action>      ${USER_ACTIONS.join(" | ")}
   status                      lần chạy gần nhất và token hôm nay
@@ -90,11 +90,10 @@ async function main(): Promise<number> {
           line("fail", `config đọc không được: ${e instanceof Error ? e.message : e}`, "mở file, sửa đúng chỗ báo lỗi. Muốn làm lại từ đầu: xoá file đó rồi chạy npm run setup");
         }
       }
-      line(
-        process.env.GITHUB_TOKEN ? "ok" : "warn",
-        process.env.GITHUB_TOKEN ? "GITHUB_TOKEN đã đặt" : "chưa đặt GITHUB_TOKEN: GitHub chỉ cho 60 request/giờ, lần chạy dễ thiếu dữ liệu",
-        process.env.GITHUB_TOKEN ? undefined : "xem BƯỚC 2 trong hướng dẫn của: npm run setup",
-      );
+      if (cfg?.sources.github.enabled ?? true) {
+        const gh = await checkGithubToken(process.env.GITHUB_TOKEN || undefined);
+        line(gh.level, gh.msg, gh.fix);
+      }
       const llm = cfg?.llm ?? defaultConfig.llm;
       if (llm.kind === "claude-cli") {
         const probe = probeCommand(llm.command);
@@ -141,8 +140,8 @@ async function main(): Promise<number> {
       const { deps, db } = buildDeps(home, cfg);
       try {
         const st = await runPipeline(deps);
-        console.log(JSON.stringify(st, null, 2));
-        console.log("\nXem kết quả:  npm run dashboard");
+        if (flags.get("json")) console.log(JSON.stringify(st, null, 2));
+        else console.log(runSummary(st));
         return st.sourceErrors.length || st.degraded.length ? 2 : 0;
       } finally {
         db.close();

@@ -8,7 +8,7 @@ It does **not** touch Facebook. Facebook is where you find people; this finds th
 
 | Part | State |
 |---|---|
-| Pipeline: collect, dedupe, rules, score, triage, card, digest, checkpoints, token budget | Built, 77 automated tests pass |
+| Pipeline: collect, dedupe, rules, score, triage, card, digest, checkpoints, token budget | Built, 82 automated tests pass |
 | Claude CLI adapter | Verified against the real `claude` CLI 2.1.310 (see `docs/DESIGN.md`, "Measured") |
 | GitHub and Hacker News connectors | Built and tested **against recorded-shape fixtures only**: the build sandbox cannot reach those APIs. First live run is yours (`npm run doctor`, `npm run scan`) |
 | Local web dashboard (`npm run dashboard`) | Built, API tested; the page itself has not been opened in a browser by me |
@@ -45,7 +45,7 @@ Everything lives in `~/.vhub-trend` (or `$VHUB_TREND_HOME`): `trend.sqlite`, `co
 ## Develop
 
 ```sh
-npm run typecheck && npm test      # 77 tests, no network, no real LLM
+npm run typecheck && npm test      # 82 tests, no network, no real LLM
 ```
 
 Design, decisions and acceptance gates: [`docs/DESIGN.md`](docs/DESIGN.md). Repository conventions: [`CLAUDE.md`](CLAUDE.md).

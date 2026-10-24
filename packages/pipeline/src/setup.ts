@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
 import type { Home } from "./app.js";
 import type { Config } from "./config.js";
+import type { RunStats } from "./pipeline.js";
+import type { FetchLike } from "./sources/http.js";
 
 /** Text that marks a value in config.example.json the user still has to replace. */
 export const TODO_MARK = "TODO:";
@@ -99,4 +101,54 @@ export function probeCommand(command: string, timeoutMs = 15_000): { ok: true; v
   if (r.error) return { ok: false, reason: r.error.message };
   if (r.status !== 0) return { ok: false, reason: (r.stderr || r.stdout || `exit ${r.status}`).trim() };
   return { ok: true, version: r.stdout.trim() };
+}
+
+export type Check = { level: "ok" | "warn" | "fail"; msg: string; fix?: string };
+
+const TOKEN_FIX = "xem BƯỚC 2 trong hướng dẫn của: npm run setup";
+
+/** Asks GitHub whether the token works. /rate_limit does not count against the quota. */
+export async function checkGithubToken(token: string | undefined, fetchImpl: FetchLike = fetch): Promise<Check> {
+  let res: Response;
+  try {
+    res = await fetchImpl("https://api.github.com/rate_limit", {
+      headers: { "user-agent": "vhub-trend-scan/0.1 (+personal use)", accept: "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (e) {
+    return { level: "warn", msg: `không kết nối được api.github.com (${e instanceof Error ? e.message : e})`, fix: "kiểm tra mạng, proxy hoặc tường lửa" };
+  }
+  if (res.status === 401) return { level: "fail", msg: "GITHUB_TOKEN sai hoặc đã hết hạn (GitHub trả 401)", fix: `tạo token mới và đặt lại; ${TOKEN_FIX}` };
+  if (!res.ok) return { level: "warn", msg: `GitHub trả HTTP ${res.status} khi kiểm tra token` };
+  const body = (await res.json()) as { resources?: { core?: { limit?: number; remaining?: number } } };
+  const core = body.resources?.core;
+  const quota = core ? ` (còn ${core.remaining}/${core.limit} request trong giờ này)` : "";
+  if (!token) return { level: "warn", msg: `chưa đặt GITHUB_TOKEN: GitHub chỉ cho 60 request/giờ${quota}, lần chạy dễ thiếu dữ liệu`, fix: TOKEN_FIX };
+  return { level: "ok", msg: `GITHUB_TOKEN hợp lệ${quota}` };
+}
+
+function explainSourceError(e: string): string {
+  if (/HTTP 401/.test(e)) return `GITHUB_TOKEN sai hoặc hết hạn. Cách sửa: ${TOKEN_FIX}, rồi npm run doctor`;
+  if (/rate limit/.test(e)) return "hết lượt gọi GitHub. Đặt GITHUB_TOKEN (BƯỚC 2 của npm run setup) hoặc chạy lại sau 1 giờ";
+  if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|aborted|timeout/i.test(e)) return "không kết nối được nguồn này. Kiểm tra mạng rồi chạy lại npm run scan";
+  return "chạy lại npm run scan; nếu vẫn lỗi, gửi dòng này cho người bảo trì";
+}
+
+/** Human summary of one run: what happened, and for each problem what to do next. */
+export function runSummary(st: RunStats): string {
+  const L: string[] = [];
+  const dropped = Object.values(st.dropped).reduce((a, b) => a + b, 0);
+  L.push(`Thu thập ${st.collected} mục (mới ${st.created}, gộp trùng ${st.merged}), loại bởi luật ${dropped}, Claude chấm ${st.triaged}, viết thẻ ${st.carded}.`);
+  L.push(`Digest hôm nay: ${st.digest} ý tưởng. Claude: ${st.llmCalls} lần gọi, ${st.cacheHits} lần dùng lại cache, ${st.tokensToday} token hôm nay.`);
+  for (const e of st.sourceErrors) L.push(`[LỖI] ${e}\n      cách sửa: ${explainSourceError(e)}`);
+  for (const d of st.degraded) {
+    if (d.endsWith(":budget")) L.push(`[chú ý] ${d}: hết ngân sách token hôm nay (budget.dailyTokens). Phần còn lại tự chạy tiếp ở lần sau`);
+    else if (d.endsWith(":error")) L.push(`[chú ý] ${d}: Claude lỗi nhiều lần. Chạy npm run doctor để kiểm tra, rồi npm run scan lại (phần đã xong không làm lại)`);
+    else if (d === "digest:partial") L.push("[chú ý] digest chưa đủ thẻ chi tiết; chạy lại npm run scan để làm tiếp");
+    else L.push(`[chú ý] ${d}`);
+  }
+  if (st.digest > 0) L.push("\nXem kết quả:  npm run dashboard");
+  else if (!st.sourceErrors.length) L.push("\nHôm nay chưa có ý tưởng mới. Thử thêm seeds hoặc queries trong config, rồi npm run scan");
+  else L.push("\nSửa các dòng [LỖI] ở trên rồi chạy lại:  npm run scan");
+  return L.join("\n");
 }
