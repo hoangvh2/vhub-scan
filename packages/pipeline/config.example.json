@@ -1,0 +1,27 @@
+{
+  "scope": {
+    "blockAuthors": [],
+    "focus": "Tools that help one person work or live better (productivity, automation, personal organisation, developer workflow). Skip anything centred on image, video, 3D, or deep technical systems that are unwise to vibe-code."
+  },
+  "projects": [
+    { "name": "VH Flow", "summary": "Replace with one or two sentences describing what this project does." },
+    { "name": "VH Studio", "summary": "Replace with one or two sentences describing what this project does." }
+  ],
+  "sources": {
+    "github": {
+      "enabled": true,
+      "queries": [
+        "topic:claude-code created:>{d14} stars:>=3",
+        "topic:productivity created:>{d14} stars:>=5",
+        "topic:automation created:>{d14} stars:>=5"
+      ],
+      "seeds": [],
+      "perQuery": 30,
+      "refreshMax": 40
+    },
+    "hn": { "enabled": true, "maxItems": 60 }
+  },
+  "llm": { "kind": "claude-cli", "command": "claude", "triageModel": "haiku", "cardModel": "sonnet", "triageEffort": "low", "cardEffort": "low", "timeoutMs": 180000 },
+  "budget": { "dailyTokens": 60000 },
+  "server": { "port": 4173 }
+}
