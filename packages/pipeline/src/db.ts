@@ -38,6 +38,13 @@ export class Db {
     }
   }
 
+  kvGet(key: string): string | undefined {
+    return this.get<{ value: string }>("SELECT value FROM kv WHERE key = ?", key)?.value;
+  }
+  kvSet(key: string, value: string): void {
+    this.run("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value);
+  }
+
   close(): void {
     this.raw.close();
   }
@@ -109,6 +116,8 @@ CREATE TABLE IF NOT EXISTS run (
   stats TEXT NOT NULL DEFAULT '{}', error TEXT, heartbeat TEXT NOT NULL, pid INTEGER
 );
 CREATE TABLE IF NOT EXISTS feedback (id INTEGER PRIMARY KEY AUTOINCREMENT, entity_id TEXT NOT NULL, action TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS cloud_event (id TEXT PRIMARY KEY, entity_id TEXT NOT NULL, action TEXT NOT NULL, applied_at TEXT NOT NULL, result TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS digest (
   day TEXT NOT NULL, entity_id TEXT NOT NULL, rank INTEGER NOT NULL, reason TEXT NOT NULL, PRIMARY KEY (day, entity_id)
 );

@@ -1,8 +1,13 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildDeps, ensureToken, loadHomeConfig, resolveHome } from "./app.js";
+import { buildCloud, buildDeps, ensureToken, loadHomeConfig, resolveHome, type Cloud } from "./app.js";
+import { checkPhonePath } from "./cloud/check.js";
+import { fromTerraformOutput, writeCloudConfig } from "./cloud/config.js";
+import { lanUrls, pairCode, pairPayload, qrSvg, qrTerminal } from "./cloud/pair.js";
+import { lastSync } from "./cloud/sync.js";
 import { defaultConfig, type Config } from "./config.js";
 import { ClaudeCliAdapter } from "./llm/claudeCli.js";
 import { USER_ACTIONS, systemClock, type UserAction } from "./model.js";
@@ -42,6 +47,10 @@ Hằng ngày:
   npm run scan            hoặc đặt lịch tự chạy: npm run schedule
   npm run status          lần chạy gần nhất, token đã dùng hôm nay
 
+Điện thoại (app Android):
+  npm run dashboard -- --lan    cho điện thoại cùng Wi-Fi mở được
+  npm run pair                  in mã ghép nối; hoặc dashboard → Hệ thống → Kết nối điện thoại
+
 Lệnh đầy đủ (npm run trend -- <lệnh>, hoặc node packages/pipeline/dist/cli.js <lệnh>):
   init [--home DIR]           tạo thư mục dữ liệu, config, token; in hướng dẫn
   doctor [--llm]              kiểm tra; --llm gọi thử Claude một lần rất nhỏ
@@ -50,6 +59,11 @@ Lệnh đầy đủ (npm run trend -- <lệnh>, hoặc node packages/pipeline/di
   feedback <id> <action>      ${USER_ACTIONS.join(" | ")}
   status                      lần chạy gần nhất và token hôm nay
   schedule                    in lệnh đặt lịch chạy hằng ngày cho hệ điều hành này
+
+Điện thoại và cloud (không bắt buộc; xem infra/README.md):
+  cloud connect [--infra DIR] đọc output Terraform, ghi ~/.vhub-trend/cloud.json, kiểm tra kết nối
+  sync                        đồng bộ ngay: nhận thao tác từ điện thoại, đẩy dữ liệu mới lên
+  pair [--port N]             in mã ghép nối điện thoại (QR rõ nhất ở dashboard: tab Hệ thống)
 
 Dữ liệu nằm ở --home, hoặc $VHUB_TREND_HOME, hoặc ~/.vhub-trend.`;
 
@@ -120,6 +134,23 @@ async function main(): Promise<number> {
           }
         }
       }
+      if (existsSync(home.cloudFile)) {
+        let cloud: Cloud | null = null;
+        const { db, store, budget } = buildDeps(home, cfg ?? defaultConfig);
+        try {
+          cloud = buildCloud(home, { db, store, budget });
+        } catch (e) {
+          line("fail", `cloud.json: ${e instanceof Error ? e.message : e}`, "chạy lại: npm run cloud:connect");
+        }
+        if (cloud) {
+          const r = await cloud.sync();
+          line(r.ok ? "ok" : "fail", r.ok ? `cloud: đồng bộ được với Firestore (project ${cloud.cfg.projectId})` : `cloud: không đồng bộ được: ${r.error}`, r.ok ? undefined : "xem infra/README.md mục Lỗi thường gặp");
+          if (r.ok) for (const c of await checkPhonePath(cloud.cfg, new Date())) line(c.level, `cloud: ${c.msg}`, c.fix);
+        }
+        db.close();
+      } else {
+        line("ok", "cloud: chưa bật (không bắt buộc). Muốn xem trên điện thoại khi ra ngoài: xem infra/README.md");
+      }
       console.log("");
       if (fails.length) {
         console.log(`Còn ${fails.length} lỗi phải sửa (dòng [LỖI] ở trên). Sửa xong chạy lại:  npm run doctor`);
@@ -137,12 +168,14 @@ async function main(): Promise<number> {
         console.error(`Sửa trong ${home.configFile}, rồi chạy:  npm run doctor`);
         return 1;
       }
-      const { deps, db } = buildDeps(home, cfg);
+      const { deps, db, store, budget } = buildDeps(home, cfg);
       try {
         const st = await runPipeline(deps);
         if (flags.get("json")) console.log(JSON.stringify(st, null, 2));
         else console.log(runSummary(st));
-        return st.sourceErrors.length || st.degraded.length ? 2 : 0;
+        const cloud = buildCloud(home, { db, store, budget, log: (m) => console.log(m) });
+        const synced = cloud ? await cloud.sync() : null;
+        return st.sourceErrors.length || st.degraded.length || (synced && !synced.ok) ? 2 : 0;
       } finally {
         db.close();
       }
@@ -154,20 +187,94 @@ async function main(): Promise<number> {
       let running = false;
       const port = Number(flags.get("port") ?? cfg.server.port);
       const host = flags.get("lan") ? "0.0.0.0" : "127.0.0.1";
+      const cloud = buildCloud(home, { db, store, budget, log: (m) => console.log(m) });
+      let syncing = false;
+      const sync = async () => {
+        if (!cloud || syncing) return;
+        syncing = true;
+        await cloud.sync().finally(() => (syncing = false));
+      };
       const app = createApp({
         db, store, budget, token,
         runNow: async () => {
           if (running) return { started: false, reason: "already running" };
           running = true;
-          void runPipeline(deps).catch(() => undefined).finally(() => (running = false));
+          void runPipeline(deps).catch(() => undefined).then(sync).finally(() => (running = false));
           return { started: true };
         },
+        pair: () => {
+          const now = new Date();
+          const lan = host === "0.0.0.0" ? lanUrls(port) : [];
+          const code = pairCode(pairPayload({ lan, token, cloud: cloud?.cfg ?? null, now }));
+          return { code, svg: qrSvg(code), lan, cloud: !!cloud, lanReachable: lan.length > 0, expiresAt: new Date(now.getTime() + 3_600_000).toISOString() };
+        },
+        extraHealth: () => ({ cloud: cloud ? { projectId: cloud.cfg.projectId, syncMinutes: cloud.cfg.syncMinutes, last: lastSync(db) } : null, lan: host === "0.0.0.0" }),
       });
+      if (cloud) {
+        void sync();
+        setInterval(() => void sync(), cloud.cfg.syncMinutes * 60_000).unref();
+      }
       await new Promise<void>((r) => app.listen(port, host, r));
       console.log(`Dashboard: http://${host === "0.0.0.0" ? "<this PC's LAN address>" : "localhost"}:${port}/?t=${token}`);
       console.log("Mở link trên trong trình duyệt. Giữ cửa sổ này mở; bấm Ctrl+C để tắt dashboard.");
       if (host === "0.0.0.0") console.log("LAN mode: anyone on your network with this link can read and change your list. Keep the token private.");
       return await new Promise<number>(() => undefined);
+    }
+    case "cloud": {
+      if (pos[0] !== "connect") {
+        console.error("dùng: npm run cloud:connect   (= trend cloud connect [--infra DIR])");
+        return 1;
+      }
+      const infra = typeof flags.get("infra") === "string" ? (flags.get("infra") as string) : join(here, "..", "..", "..", "infra");
+      const tf = spawnSync("terraform", [`-chdir=${infra}`, "output", "-json"], { encoding: "utf8" });
+      if (tf.error || tf.status !== 0) {
+        console.error(tf.error ? "Không chạy được lệnh terraform. Cài Terraform (xem infra/README.md bước 1), mở terminal mới rồi chạy lại." : `terraform output lỗi:\n${tf.stderr}`);
+        console.error(`Thư mục Terraform đang dùng: ${infra}  (đổi bằng --infra DIR)`);
+        return 1;
+      }
+      try {
+        const c = fromTerraformOutput(tf.stdout);
+        mkdirSync(home.dir, { recursive: true });
+        writeCloudConfig(home.cloudFile, c);
+        console.log(`Đã ghi ${home.cloudFile} (project ${c.projectId}). File này chứa khoá của PC: không gửi cho ai, không commit.`);
+      } catch (e) {
+        console.error(e instanceof Error ? e.message : e);
+        return 1;
+      }
+      console.log("Bước tiếp theo:  npm run doctor   (đồng bộ thử và kiểm tra đường đi của điện thoại)");
+      return 0;
+    }
+    case "sync": {
+      const { db, store, budget } = buildDeps(home, loadHomeConfig(home));
+      try {
+        const cloud = buildCloud(home, { db, store, budget, log: (m) => console.log(m) });
+        if (!cloud) {
+          console.error("Chưa bật cloud. Làm theo infra/README.md, rồi chạy: npm run cloud:connect");
+          return 1;
+        }
+        return (await cloud.sync()).ok ? 0 : 2;
+      } finally {
+        db.close();
+      }
+    }
+    case "pair": {
+      const cfg = loadHomeConfig(home);
+      const { db, store, budget } = buildDeps(home, cfg);
+      const cloud = buildCloud(home, { db, store, budget });
+      db.close();
+      const port = Number(flags.get("port") ?? cfg.server.port);
+      const lan = lanUrls(port);
+      const code = pairCode(pairPayload({ lan, token: ensureToken(home), cloud: cloud?.cfg ?? null, now: new Date() }));
+      const art = qrTerminal(code, process.stdout.columns ?? 80);
+      console.log(art ?? "(Cửa sổ terminal hẹp quá để vẽ QR. Mở dashboard → Hệ thống → Kết nối điện thoại để quét, hoặc dán mã bên dưới.)");
+      console.log("\nCách ghép nối:");
+      console.log("  1. Trên PC chạy:  npm run dashboard -- --lan   (giữ cửa sổ mở) để điện thoại cùng Wi-Fi vào được");
+      console.log("  2. Trên điện thoại: mở app VHub Trend → Kết nối với PC → Quét mã (hoặc Dán mã)");
+      console.log(cloud ? "  3. Mã có hạn 1 giờ. Sau khi ghép, app tự dùng cloud khi bạn ra khỏi nhà." : "  3. Cloud chưa bật: app chỉ xem được khi cùng Wi-Fi với PC. Bật cloud: xem infra/README.md");
+      console.log(`  Địa chỉ trong mã: ${lan.join(", ") || "(không thấy mạng LAN nào)"}`);
+      console.log("\nMã (dán vào app nếu không quét được; giữ riêng, ai có mã này xem và sửa được danh sách của bạn):");
+      console.log(code);
+      return 0;
     }
     case "feedback": {
       const [id, action] = pos;

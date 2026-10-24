@@ -31,3 +31,46 @@ jobs:
         run: |
           node packages/pipeline/dist/cli.js help
           test -f packages/pipeline/dist/web/index.html
+
+  cloud:
+    name: Terraform plan (no credentials), Firestore rules and sync (emulators)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tests/package-lock.json
+      - uses: actions/setup-java@v4 # the Firestore emulator is a Java program
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.0
+          terraform_wrapper: false
+      - name: Terraform fmt and validate
+        working-directory: infra
+        run: |
+          terraform fmt -check -recursive -diff
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: Terraform plan without Google credentials
+        # A dummy access token lets the providers configure; with no state and no data sources the plan
+        # makes no API calls, so this proves the configuration is complete without a real project.
+        working-directory: infra
+        env:
+          GOOGLE_OAUTH_ACCESS_TOKEN: offline-plan-not-a-real-token
+        run: |
+          terraform plan -input=false -refresh=false -lock=false -var project_id=vhub-trend-ci-000 -no-color | tee plan.txt
+          grep -q "Plan: 17 to add, 0 to change, 0 to destroy." plan.txt
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix tests
+      - name: Firestore rules and PC-phone sync against the emulators
+        run: npm test --prefix tests

@@ -4,8 +4,12 @@
   "private": true,
   "type": "module",
   "description": "Collect, dedupe, filter, triage and publish idea digests. Runs on the user's PC; Claude CLI is the default analyzer.",
-  "bin": { "trend": "dist/cli.js" },
-  "engines": { "node": ">=22.13" },
+  "bin": {
+    "trend": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/copy-web.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -15,5 +19,8 @@
     "@types/node": "^22.15.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
+  },
+  "dependencies": {
+    "qrcode-generator": "^2.0.4"
   }
 }

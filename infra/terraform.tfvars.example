@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (never committed) and fill in.
+project_id = "vhub-trend-123456" # Project ID (not the display name) of the project you created in README step 2
+
+# Optional
+# firestore_location = "asia-southeast1"
+# create_pc_key      = true

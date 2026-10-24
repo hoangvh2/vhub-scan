@@ -52,6 +52,6 @@ collect -> refresh -> rules -> score -> triage (LLM) -> enrich -> card (LLM) -> 
 
 1. **Calibrate (next):** run live for a week, label ~100 items Keep/Skip, tune rules and SimHash threshold, measure the real funnel.
 2. **Android app** (Kotlin Compose, reads the PC's API over LAN with the token), release APK signed in CI on merge to `main`.
-3. **Cloud (optional):** own GCP project, Terraform in the style of `hoangvh2/my-recap` (`infra/`, `deploy.mjs`, Firestore rules, Hosting at `trend.vhub.id.vn`), PC pushes the aggregated digest only.
+3. **Cloud (optional), built 2026-10-24:** own GCP project on the free Spark plan, Terraform in `infra/` in the style of `hoangvh2/my-recap`, Firestore rules in `firebase/`, the PC pushes one snapshot document and drains a phone inbox; the phone signs in with a custom token minted at pairing. No Hosting yet (the dashboard stays on the PC). Details and data contract: [`SYNC.md`](SYNC.md).
 
 Facebook stays manual: you read, and add the builder's GitHub handle to `sources.github.seeds` once.
