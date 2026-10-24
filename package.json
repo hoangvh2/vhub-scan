@@ -1,0 +1,23 @@
+{
+  "name": "vhub-trend-scan",
+  "private": true,
+  "version": "0.1.0",
+  "description": "VHub Trend Scan: a personal, PC-first pipeline that finds tool ideas worth building and shows them on a local dashboard.",
+  "workspaces": ["packages/*"],
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "setup": "npm run build && node packages/pipeline/dist/cli.js init",
+    "doctor": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js doctor --llm",
+    "scan": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js run",
+    "dashboard": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js serve",
+    "status": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js status",
+    "schedule": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js schedule",
+    "cloud:connect": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js cloud connect",
+    "sync": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js sync",
+    "pair": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js pair",
+    "trend": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js",
+    "typecheck": "npm run typecheck -w @vhub/trend-pipeline",
+    "test": "npm test -w @vhub/trend-pipeline",
+    "build": "npm run build -w @vhub/trend-pipeline"
+  }
+}

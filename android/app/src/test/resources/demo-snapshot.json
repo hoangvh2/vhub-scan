@@ -1,0 +1,579 @@
+{
+ "schema": 1,
+ "generatedAt": "2026-10-24T10:45:33.411Z",
+ "day": "2026-10-24",
+ "digest": [
+  {
+   "id": "github:tinyplan/weekboard",
+   "title": "tinyplan/weekboard",
+   "description": "Plan your week in a plain Markdown file; a CLI turns it into calendar blocks and a Friday review.",
+   "url": "https://github.com/tinyplan/weekboard",
+   "author": "tinyplan",
+   "license": "MIT",
+   "topics": [
+    "productivity",
+    "cli",
+    "calendar"
+   ],
+   "stage": "carded",
+   "userState": "new",
+   "triage": {
+    "score": 3,
+    "cat": "l\u1eadp k\u1ebf ho\u1ea1ch",
+    "why": "L\u1eadp k\u1ebf ho\u1ea1ch tu\u1ea7n b\u1eb1ng Markdown, t\u1ef1 x\u1ebfp l\u1ecbch; \u0111\u00fang nhu c\u1ea7u t\u1ed5 ch\u1ee9c vi\u1ec7c c\u00e1 nh\u00e2n."
+   },
+   "heuristic": 9,
+   "card": {
+    "what": "CLI \u0111\u1ecdc m\u1ed9t file Markdown k\u1ebf ho\u1ea1ch tu\u1ea7n, sinh l\u1ecbch (.ics) theo khung gi\u1edd, v\u00e0 t\u1ea1o b\u1ea3n t\u1ed5ng k\u1ebft cu\u1ed1i tu\u1ea7n.",
+    "learn": "C\u00e1ch gi\u1eef d\u1eef li\u1ec7u \u1edf d\u1ea1ng v\u0103n b\u1ea3n thu\u1ea7n m\u00e0 v\u1eabn t\u1ef1 \u0111\u1ed9ng ho\u00e1 \u0111\u01b0\u1ee3c: parser nh\u1ecf, l\u1ecbch l\u00e0 \u0111\u1ea7u ra, kh\u00f4ng kho\u00e1 v\u00e0o app n\u00e0o.",
+    "apply": [
+     {
+      "project": "VH Flow",
+      "how": "Th\u00eam 'xu\u1ea5t tu\u1ea7n ra l\u1ecbch' t\u1eeb danh s\u00e1ch vi\u1ec7c; d\u00f9ng .ics n\u00ean ch\u1ea1y \u0111\u01b0\u1ee3c v\u1edbi Google Calendar."
+     },
+     {
+      "project": "VH Studio",
+      "how": "M\u1eabu 'review th\u1ee9 S\u00e1u' cho t\u1eebng d\u1ef1 \u00e1n, sinh t\u1eeb l\u1ecbch s\u1eed commit."
+     }
+    ],
+    "effort": "S",
+    "risk": "Ch\u01b0a h\u1ed7 tr\u1ee3 l\u1eb7p l\u1ea1i ph\u1ee9c t\u1ea1p (m\u1ed7i th\u1ee9 Hai th\u1ee9 hai c\u1ee7a th\u00e1ng); gi\u1ea5y ph\u00e9p MIT, d\u00f9ng \u0111\u01b0\u1ee3c."
+   },
+   "stars": 266,
+   "points": null,
+   "sources": [
+    "github",
+    "hn"
+   ],
+   "firstSeen": "2026-10-14T10:45:32.420Z",
+   "shownAt": "2026-10-24T10:45:32.420Z",
+   "shownReason": "\u0111i\u1ec3m 3, t\u0103ng nhanh (+26 sao/ng\u00e0y)",
+   "series": [
+    41,
+    58,
+    77,
+    96,
+    120,
+    151,
+    183,
+    212,
+    240,
+    266
+   ]
+  },
+  {
+   "id": "github:quietdesk/inbox-zero-agent",
+   "title": "quietdesk/inbox-zero-agent",
+   "description": "A local agent that labels, snoozes and drafts replies for Gmail using rules you write in YAML.",
+   "url": "https://github.com/quietdesk/inbox-zero-agent",
+   "author": "quietdesk",
+   "license": "Apache-2.0",
+   "topics": [
+    "automation",
+    "agent",
+    "email"
+   ],
+   "stage": "carded",
+   "userState": "new",
+   "triage": {
+    "score": 3,
+    "cat": "t\u1ef1 \u0111\u1ed9ng ho\u00e1",
+    "why": "T\u00e1c t\u1eed ch\u1ea1y c\u1ee5c b\u1ed9, lu\u1eadt vi\u1ebft b\u1eb1ng YAML; m\u1eabu t\u1ed1t cho t\u1ef1 \u0111\u1ed9ng ho\u00e1 c\u00f3 ki\u1ec3m so\u00e1t."
+   },
+   "heuristic": 8.5,
+   "card": {
+    "what": "T\u00e1c t\u1eed ch\u1ea1y tr\u00ean m\u00e1y b\u1ea1n, \u0111\u1ecdc Gmail qua API, g\u1eafn nh\u00e3n, ho\u00e3n, v\u00e0 so\u1ea1n nh\u00e1p tr\u1ea3 l\u1eddi theo lu\u1eadt YAML.",
+    "learn": "T\u00e1ch 'lu\u1eadt do ng\u01b0\u1eddi vi\u1ebft' kh\u1ecfi 'ph\u1ea7n AI \u0111\u1ec1 xu\u1ea5t'; AI ch\u1ec9 so\u1ea1n nh\u00e1p, kh\u00f4ng g\u1eedi.",
+    "apply": [
+     {
+      "project": "VH Flow",
+      "how": "C\u00f9ng m\u00f4 h\u00ecnh: AI \u0111\u1ec1 xu\u1ea5t vi\u1ec7c t\u1eeb email, ng\u01b0\u1eddi b\u1ea5m ch\u1ea5p nh\u1eadn."
+     }
+    ],
+    "effort": "M",
+    "risk": "C\u1ea7n OAuth Gmail (quy\u1ec1n r\u1ed9ng); ki\u1ec3m tra k\u1ef9 ph\u1ea1m vi quy\u1ec1n tr\u01b0\u1edbc khi th\u1eed."
+   },
+   "stars": 139,
+   "points": null,
+   "sources": [
+    "github"
+   ],
+   "firstSeen": "2026-10-14T10:45:32.420Z",
+   "shownAt": "2026-10-24T10:45:32.420Z",
+   "shownReason": "\u0111i\u1ec3m 3, ngu\u1ed3n theo d\u00f5i",
+   "series": [
+    12,
+    19,
+    31,
+    44,
+    60,
+    73,
+    90,
+    104,
+    121,
+    139
+   ]
+  },
+  {
+   "id": "url:habito.example.com",
+   "title": "Habito",
+   "description": "A habit tracker and calendar assistant for busy people.",
+   "url": "https://habito.example.com",
+   "author": "bob",
+   "license": null,
+   "topics": [
+    "show-hn",
+    "habit"
+   ],
+   "stage": "carded",
+   "userState": "new",
+   "triage": {
+    "score": 2,
+    "cat": "\u0111\u1eddi s\u1ed1ng",
+    "why": "Theo d\u00f5i th\u00f3i quen g\u1eafn v\u1edbi l\u1ecbch; giao di\u1ec7n g\u1ecdn, nhi\u1ec1u th\u1ea3o lu\u1eadn tr\u00ean HN."
+   },
+   "heuristic": 8,
+   "card": {
+    "what": "Web app ghi th\u00f3i quen v\u00e0 \u0111\u1ec1 xu\u1ea5t khung gi\u1edd tr\u1ed1ng trong l\u1ecbch \u0111\u1ec3 l\u00e0m th\u00f3i quen \u0111\u00f3.",
+    "learn": "G\u1ee3i \u00fd d\u1ef1a tr\u00ean kho\u1ea3ng tr\u1ed1ng th\u1eadt c\u1ee7a l\u1ecbch thay v\u00ec nh\u1eafc gi\u1edd c\u1ed1 \u0111\u1ecbnh.",
+    "apply": [
+     {
+      "project": "VH Flow",
+      "how": "G\u1ee3i \u00fd gi\u1edd l\u00e0m vi\u1ec7c l\u1eb7p l\u1ea1i d\u1ef1a tr\u00ean l\u1ecbch tr\u1ed1ng."
+     }
+    ],
+    "effort": "M",
+    "risk": "M\u00e3 ngu\u1ed3n \u0111\u00f3ng, ch\u1ec9 h\u1ecdc \u00fd t\u01b0\u1edfng."
+   },
+   "stars": null,
+   "points": 92,
+   "sources": [
+    "hn"
+   ],
+   "firstSeen": "2026-10-19T10:45:32.420Z",
+   "shownAt": "2026-10-24T10:45:32.420Z",
+   "shownReason": "\u0111i\u1ec3m 2, HN 92 \u0111i\u1ec3m",
+   "series": [
+    12,
+    38,
+    64,
+    81,
+    92
+   ]
+  },
+  {
+   "id": "github:fernwood/receipt-ledger",
+   "title": "fernwood/receipt-ledger",
+   "description": "Forward receipts by email, get a monthly spending CSV and a budget report. Self-hosted, SQLite.",
+   "url": "https://github.com/fernwood/receipt-ledger",
+   "author": "fernwood",
+   "license": "MIT",
+   "topics": [
+    "finance",
+    "budget",
+    "self-hosted"
+   ],
+   "stage": "carded",
+   "userState": "new",
+   "triage": {
+    "score": 2,
+    "cat": "t\u00e0i ch\u00ednh c\u00e1 nh\u00e2n",
+    "why": "Ghi chi ti\u00eau t\u1eeb email ho\u00e1 \u0111\u01a1n, t\u1ef1 host b\u1eb1ng SQLite; nh\u1ecf, d\u1ec5 \u0111\u1ecdc."
+   },
+   "heuristic": 7.5,
+   "card": {
+    "what": "D\u1ecbch v\u1ee5 nh\u1ecf nh\u1eadn email ho\u00e1 \u0111\u01a1n, tr\u00edch s\u1ed1 ti\u1ec1n v\u00e0 ng\u00e0y, ghi SQLite, xu\u1ea5t b\u00e1o c\u00e1o th\u00e1ng.",
+    "learn": "\u0110\u1ea7u v\u00e0o l\u00e0 email (ai c\u0169ng c\u00f3) thay v\u00ec app ri\u00eang; tr\u00edch xu\u1ea5t c\u00f3 ki\u1ec3m tra b\u1eb1ng tay khi kh\u00f4ng ch\u1eafc.",
+    "apply": [
+     {
+      "project": "VH Studio",
+      "how": "Theo d\u00f5i chi ph\u00ed c\u00f4ng c\u1ee5 (API, hosting) t\u1eeb email ho\u00e1 \u0111\u01a1n."
+     }
+    ],
+    "effort": "S",
+    "risk": "Tr\u00edch xu\u1ea5t b\u1eb1ng regex, ho\u00e1 \u0111\u01a1n ti\u1ebfng Vi\u1ec7t c\u1ea7n th\u00eam m\u1eabu."
+   },
+   "stars": 262,
+   "points": null,
+   "sources": [
+    "github"
+   ],
+   "firstSeen": "2026-10-14T10:45:32.420Z",
+   "shownAt": "2026-10-24T10:45:32.420Z",
+   "shownReason": "\u0111i\u1ec3m 2",
+   "series": [
+    210,
+    214,
+    219,
+    225,
+    230,
+    236,
+    241,
+    249,
+    255,
+    262
+   ]
+  },
+  {
+   "id": "github:northpaw/standup-bot",
+   "title": "northpaw/standup-bot",
+   "description": "Generates a daily standup from your git commits, PRs and calendar; posts to Slack or prints it.",
+   "url": "https://github.com/northpaw/standup-bot",
+   "author": "northpaw",
+   "license": "MIT",
+   "topics": [
+    "developer-tools",
+    "automation",
+    "claude-code"
+   ],
+   "stage": "carded",
+   "userState": "new",
+   "triage": {
+    "score": 2,
+    "cat": "quy tr\u00ecnh dev",
+    "why": "T\u1ef1 vi\u1ebft standup t\u1eeb commit v\u00e0 l\u1ecbch; ti\u1ebft ki\u1ec7m 10 ph\u00fat m\u1ed7i s\u00e1ng."
+   },
+   "heuristic": 7,
+   "card": {
+    "what": "Script \u0111\u1ecdc git log, PR \u0111\u00e3 m\u1edf/merge v\u00e0 l\u1ecbch h\u00f4m qua, vi\u1ebft b\u1ea3n standup 5 d\u00f2ng.",
+    "learn": "Gom nhi\u1ec1u ngu\u1ed3n nh\u1ecf th\u00e0nh m\u1ed9t b\u1ea3n t\u00f3m t\u1eaft c\u1ed1 \u0111\u1ecbnh \u0111\u1ecbnh d\u1ea1ng.",
+    "apply": [
+     {
+      "project": "VH Flow",
+      "how": "B\u00e1o c\u00e1o cu\u1ed1i ng\u00e0y t\u1ef1 \u0111\u1ed9ng cho team outsourcing."
+     }
+    ],
+    "effort": "S",
+    "risk": "Ph\u1ee5 thu\u1ed9c \u0111\u1ecbnh d\u1ea1ng commit message."
+   },
+   "stars": 71,
+   "points": null,
+   "sources": [
+    "github"
+   ],
+   "firstSeen": "2026-10-14T10:45:32.420Z",
+   "shownAt": "2026-10-24T10:45:32.420Z",
+   "shownReason": "\u0111i\u1ec3m 2",
+   "series": [
+    8,
+    15,
+    22,
+    30,
+    41,
+    49,
+    55,
+    60,
+    66,
+    71
+   ]
+  }
+ ],
+ "kept": [
+  {
+   "id": "github:lifehub/planner",
+   "title": "lifehub/planner",
+   "description": "A calendar assistant for personal life: reminders, budget and a weekly planner you own.",
+   "url": "https://github.com/lifehub/planner",
+   "author": "lifehub",
+   "license": "MIT",
+   "topics": [
+    "productivity",
+    "calendar"
+   ],
+   "stage": "carded",
+   "userState": "kept",
+   "triage": {
+    "score": 3,
+    "cat": "l\u1eadp k\u1ebf ho\u1ea1ch",
+    "why": "Tr\u1ee3 l\u00fd l\u1ecbch c\u00e1 nh\u00e2n, d\u1eef li\u1ec7u do b\u1ea1n gi\u1eef; g\u1ea7n v\u1edbi VH Flow."
+   },
+   "heuristic": 6.5,
+   "card": {
+    "what": "\u1ee8ng d\u1ee5ng l\u1ecbch c\u00e1 nh\u00e2n k\u00e8m nh\u1eafc vi\u1ec7c v\u00e0 ng\u00e2n s\u00e1ch, d\u1eef li\u1ec7u l\u01b0u c\u1ee5c b\u1ed9, \u0111\u1ed3ng b\u1ed9 tu\u1ef3 ch\u1ecdn.",
+    "learn": "M\u00f4 h\u00ecnh local-first v\u1edbi \u0111\u1ed3ng b\u1ed9 tu\u1ef3 ch\u1ecdn.",
+    "apply": [
+     {
+      "project": "VH Flow",
+      "how": "Tham kh\u1ea3o c\u00e1ch \u0111\u1ed3ng b\u1ed9 tu\u1ef3 ch\u1ecdn m\u00e0 kh\u00f4ng b\u1eaft \u0111\u0103ng nh\u1eadp."
+     }
+    ],
+    "effort": "L",
+    "risk": "Codebase l\u1edbn, ch\u1ec9 n\u00ean h\u1ecdc ki\u1ebfn tr\u00fac."
+   },
+   "stars": 239,
+   "points": null,
+   "sources": [
+    "github"
+   ],
+   "firstSeen": "2026-10-14T10:45:32.420Z",
+   "shownAt": null,
+   "series": [
+    140,
+    151,
+    160,
+    172,
+    185,
+    197,
+    205,
+    214,
+    226,
+    239
+   ]
+  },
+  {
+   "id": "github:mintcli/clipnote",
+   "title": "mintcli/clipnote",
+   "description": "Clipboard history that turns copied snippets into searchable notes with tags.",
+   "url": "https://github.com/mintcli/clipnote",
+   "author": "mintcli",
+   "license": "MIT",
+   "topics": [
+    "notes",
+    "cli"
+   ],
+   "stage": "carded",
+   "userState": "trying",
+   "triage": {
+    "score": 2,
+    "cat": "ghi ch\u00fa",
+    "why": "Bi\u1ebfn clipboard th\u00e0nh ghi ch\u00fa t\u00ecm \u0111\u01b0\u1ee3c; nh\u1ecf g\u1ecdn."
+   },
+   "heuristic": 6,
+   "card": {
+    "what": "Daemon nh\u1ecf l\u01b0u l\u1ecbch s\u1eed clipboard, g\u1eafn th\u1ebb t\u1ef1 \u0111\u1ed9ng, t\u00ecm b\u1eb1ng l\u1ec7nh.",
+    "learn": "Thu th\u1eadp th\u1ee5 \u0111\u1ed9ng, t\u1ed5 ch\u1ee9c sau.",
+    "apply": [
+     {
+      "project": "VH Studio",
+      "how": "L\u01b0u \u0111o\u1ea1n prompt hay d\u00f9ng."
+     }
+    ],
+    "effort": "S",
+    "risk": "Clipboard c\u00f3 th\u1ec3 ch\u1ee9a m\u1eadt kh\u1ea9u; c\u1ea7n lo\u1ea1i tr\u1eeb."
+   },
+   "stars": 74,
+   "points": null,
+   "sources": [
+    "github"
+   ],
+   "firstSeen": "2026-10-14T10:45:32.420Z",
+   "shownAt": null,
+   "series": [
+    55,
+    57,
+    60,
+    61,
+    64,
+    66,
+    69,
+    71,
+    72,
+    74
+   ]
+  }
+ ],
+ "explore": [
+  {
+   "id": "github:dotfiles-pro/setup-kit",
+   "title": "dotfiles-pro/setup-kit",
+   "description": "One command to set up a dev laptop with sane defaults",
+   "url": "https://github.com/dotfiles-pro/setup-kit",
+   "author": "dotfiles-pro",
+   "license": "MIT",
+   "topics": [
+    "productivity"
+   ],
+   "stage": "triaged",
+   "userState": "new",
+   "triage": {
+    "score": 2,
+    "cat": "quy tr\u00ecnh dev",
+    "why": "C\u00e0i m\u00e1y dev b\u1eb1ng m\u1ed9t l\u1ec7nh."
+   },
+   "heuristic": 5,
+   "card": null,
+   "stars": 35,
+   "points": null,
+   "sources": [
+    "github"
+   ],
+   "firstSeen": "2026-10-20T10:45:32.420Z",
+   "shownAt": null,
+   "series": [
+    27,
+    29,
+    33,
+    35
+   ]
+  },
+  {
+   "id": "github:taskpond/kanban-tui",
+   "title": "taskpond/kanban-tui",
+   "description": "Kanban board in the terminal backed by a JSON file",
+   "url": "https://github.com/taskpond/kanban-tui",
+   "author": "taskpond",
+   "license": "MIT",
+   "topics": [
+    "productivity"
+   ],
+   "stage": "triaged",
+   "userState": "new",
+   "triage": {
+    "score": 2,
+    "cat": "l\u1eadp k\u1ebf ho\u1ea1ch",
+    "why": "Kanban trong terminal, d\u1eef li\u1ec7u l\u00e0 JSON."
+   },
+   "heuristic": 4.5,
+   "card": null,
+   "stars": 43,
+   "points": null,
+   "sources": [
+    "github"
+   ],
+   "firstSeen": "2026-10-20T10:45:32.420Z",
+   "shownAt": null,
+   "series": [
+    34,
+    36,
+    41,
+    43
+   ]
+  },
+  {
+   "id": "github:sprintly/retro-kit",
+   "title": "sprintly/retro-kit",
+   "description": "Retro templates and a timer for remote teams",
+   "url": "https://github.com/sprintly/retro-kit",
+   "author": "sprintly",
+   "license": "MIT",
+   "topics": [
+    "productivity"
+   ],
+   "stage": "triaged",
+   "userState": "new",
+   "triage": {
+    "score": 1,
+    "cat": "quy tr\u00ecnh nh\u00f3m",
+    "why": "M\u1eabu retro g\u1ecdn cho nh\u00f3m l\u00e0m t\u1eeb xa."
+   },
+   "heuristic": 5.5,
+   "card": null,
+   "stars": 27,
+   "points": null,
+   "sources": [
+    "github"
+   ],
+   "firstSeen": "2026-10-20T10:45:32.420Z",
+   "shownAt": null,
+   "series": [
+    20,
+    22,
+    25,
+    27
+   ]
+  },
+  {
+   "id": "github:mealmap/plan",
+   "title": "mealmap/plan",
+   "description": "Weekly meal planner that builds the shopping list",
+   "url": "https://github.com/mealmap/plan",
+   "author": "mealmap",
+   "license": "MIT",
+   "topics": [
+    "productivity"
+   ],
+   "stage": "triaged",
+   "userState": "new",
+   "triage": {
+    "score": 1,
+    "cat": "\u0111\u1eddi s\u1ed1ng",
+    "why": "L\u00ean th\u1ef1c \u0111\u01a1n tu\u1ea7n, t\u1ef1 ra danh s\u00e1ch \u0111i ch\u1ee3."
+   },
+   "heuristic": 4,
+   "card": null,
+   "stars": 51,
+   "points": null,
+   "sources": [
+    "github"
+   ],
+   "firstSeen": "2026-10-20T10:45:32.420Z",
+   "shownAt": null,
+   "series": [
+    41,
+    43,
+    49,
+    51
+   ]
+  },
+  {
+   "id": "github:focusbar/menubar",
+   "title": "focusbar/menubar",
+   "description": "Pomodoro timer in the menu bar with daily stats",
+   "url": "https://github.com/focusbar/menubar",
+   "author": "focusbar",
+   "license": "MIT",
+   "topics": [
+    "productivity"
+   ],
+   "stage": "triaged",
+   "userState": "new",
+   "triage": {
+    "score": 1,
+    "cat": "t\u1eadp trung",
+    "why": "\u0110\u1ed3ng h\u1ed3 Pomodoro k\u00e8m th\u1ed1ng k\u00ea ng\u00e0y."
+   },
+   "heuristic": 3.5,
+   "card": null,
+   "stars": 59,
+   "points": null,
+   "sources": [
+    "github"
+   ],
+   "firstSeen": "2026-10-20T10:45:32.420Z",
+   "shownAt": null,
+   "series": [
+    48,
+    50,
+    57,
+    59
+   ]
+  }
+ ],
+ "health": {
+  "lastRun": {
+   "startedAt": "2026-10-24T08:21:32.420Z",
+   "finishedAt": "2026-10-24T08:27:32.420Z",
+   "status": "ok",
+   "error": null,
+   "collected": 214,
+   "created": 63,
+   "merged": 9,
+   "triaged": 40,
+   "carded": 8,
+   "digest": 5,
+   "llmCalls": 4,
+   "cacheHits": 2,
+   "dropped": {
+    "ngo\u00e0i ph\u1ea1m vi": 21,
+    "m\u00f4 t\u1ea3 qu\u00e1 ng\u1eafn": 14,
+    "c\u0169": 8
+   },
+   "degraded": [],
+   "sourceErrors": []
+  },
+  "tokens": {
+   "used": 31840,
+   "limit": 60000,
+   "calls": 4,
+   "costUsd": 0.093
+  },
+  "counts": {
+   "new": 10,
+   "kept": 1,
+   "skipped": 0,
+   "snoozed": 0,
+   "trying": 1,
+   "done": 0
+  }
+ }
+}

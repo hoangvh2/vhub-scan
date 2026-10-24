@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f3ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141412" media="(prefers-color-scheme: dark)">
+<title>VHub Trend Scan</title>
+<style>
+/* Design tokens. Shared with the Android app (android/app/.../ui/Theme.kt): paper neutrals, one vermilion accent,
+   green only for "kept", amber only for "snoozed". Change both places together. */
+:root{
+  --bg:#f4f3ef;--surface:#fbfaf7;--raised:#fff;--ink:#1c1b18;--ink2:#4a4842;--mute:#77746b;--line:#e2dfd6;--line2:#cfcbc0;
+  --accent:#b5461f;--accent-ink:#fff;--accent-soft:#f6e6dd;--pos:#2f6b45;--pos-soft:#e3efe6;--warn:#8a6100;--warn-soft:#f5ecd3;--neg:#a32d23;
+  --r:8px;--shadow:0 1px 0 rgba(28,27,24,.04),0 8px 24px -12px rgba(28,27,24,.18);
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141412;--surface:#1a1a17;--raised:#211f1c;--ink:#ebe8e0;--ink2:#c4c0b5;--mute:#918d82;--line:#2c2b27;--line2:#3c3a34;
+  --accent:#e2805a;--accent-ink:#1a0e08;--accent-soft:#3a2419;--pos:#86c39a;--pos-soft:#1c2d22;--warn:#d9b45a;--warn-soft:#352b14;--neg:#ec8f84;
+  --shadow:0 1px 0 rgba(0,0,0,.3),0 12px 28px -14px rgba(0,0,0,.7);
+}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+button,input{font:inherit;color:inherit}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.num{font-variant-numeric:tabular-nums}
+.mute{color:var(--mute)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+/* Shell: rail | list | detail on desktop; top bar + list + sheet + tab bar on phones. */
+.app{display:grid;grid-template-columns:232px minmax(340px,1fr) minmax(400px,1.25fr);height:100vh;height:100dvh}
+.rail{border-right:1px solid var(--line);display:flex;flex-direction:column;padding:16px 12px;gap:18px;min-height:0;background:var(--surface)}
+.brand{display:flex;align-items:baseline;gap:8px;padding:0 8px}
+.brand b{font-size:15px;letter-spacing:-.01em}
+.brand span{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em}
+.nav{display:grid;gap:2px}
+.nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:6px;color:var(--ink2)}
+.nav button:hover{background:var(--bg)}
+.nav button[aria-selected=true]{background:var(--accent-soft);color:var(--ink);font-weight:600}
+.nav button[aria-selected=true] svg{color:var(--accent)}
+.nav .count{margin-left:auto;font-size:12px;color:var(--mute)}
+.nav kbd{display:none}
+.status{margin-top:auto;display:grid;gap:10px;padding:12px 8px 0;border-top:1px solid var(--line)}
+.status .row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink2)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line2);flex:none}
+.dot.ok{background:var(--pos)}.dot.bad{background:var(--neg)}.dot.run{background:var(--warn)}
+.tok{display:grid;gap:4px}
+.meter{height:4px;border-radius:2px;background:var(--line);overflow:hidden}.meter>i{display:block;height:100%;background:var(--ink2)}
+.meter.hot>i{background:var(--accent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:6px;border:1px solid var(--line2);background:var(--raised);cursor:pointer;white-space:nowrap;font-size:13.5px}
+.btn:hover{border-color:var(--ink2)}
+a.btn{text-decoration:none}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.btn.primary:hover{opacity:.9}
+.btn.keep[aria-pressed=true]{background:var(--pos-soft);border-color:var(--pos);color:var(--pos)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--bg);border-color:var(--line)}
+.btn.sm{height:28px;padding:0 9px;font-size:12.5px}
+
+.pane{min-width:0;min-height:0;display:flex;flex-direction:column}
+.list{border-right:1px solid var(--line)}
+.phead{padding:16px 18px 10px;display:grid;gap:10px;border-bottom:1px solid var(--line);background:var(--bg)}
+.phead h1{font-size:18px;margin:0;letter-spacing:-.01em}
+.phead .sub{font-size:12.5px;color:var(--mute)}
+.search{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border:1px solid var(--line2);border-radius:6px;background:var(--raised)}
+.search[hidden]{display:none}
+.search input{border:0;outline:0;background:transparent;flex:1;min-width:0}
+.scroll{overflow:auto;flex:1;min-height:0;overscroll-behavior:contain}
+
+.rows{list-style:none;margin:0;padding:6px 0}
+.rowi{display:grid;grid-template-columns:20px 1fr auto;gap:2px 12px;padding:10px 18px;border-left:2px solid transparent;cursor:pointer;align-items:start}
+.rowi:hover{background:var(--surface)}
+.rowi[aria-selected=true]{background:var(--surface);border-left-color:var(--accent)}
+.rowi .t{font-weight:600;font-size:14px;overflow-wrap:anywhere;line-height:1.3}
+.rowi .w{grid-column:2/4;color:var(--ink2);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rowi .m{grid-column:2/4;display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--mute)}
+.rowi .m .st{color:var(--pos);font-weight:600}.rowi .m .st.snoozed{color:var(--warn)}
+.rowi .delta{font-size:12px;color:var(--mute);text-align:right;white-space:nowrap;padding-top:1px}
+.rowi .delta b{color:var(--ink);font-weight:600}
+.score{display:grid;place-items:center;width:20px;height:20px;border-radius:5px;border:1px solid var(--line2);font-size:11.5px;font-weight:700;color:var(--mute);margin-top:-1px}
+.score.s2{color:var(--ink);border-color:var(--ink2)}
+.score.s3{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+
+.detail{background:var(--surface)}
+.dbody{padding:22px 26px 28px;display:grid;gap:22px;max-width:760px}
+.dtop{display:grid;gap:8px}
+.dtop h2{font-size:22px;line-height:1.2;margin:0;letter-spacing:-.015em;overflow-wrap:anywhere}
+.dtop .desc{color:var(--ink2);font-size:14.5px}
+.facts{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--mute)}
+.facts b{color:var(--ink);font-weight:600}
+.why{border-left:2px solid var(--accent);padding:2px 0 2px 12px;font-size:14px}
+.why small{display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--mute);margin-bottom:2px}
+.sec h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:0 0 8px;font-weight:600}
+.cardgrid{display:grid;grid-template-columns:110px 1fr;gap:10px 16px;margin:0}
+.cardgrid dt{color:var(--mute);font-size:12.5px;padding-top:1px}
+.cardgrid dd{margin:0}
+.apply{display:grid;gap:6px}
+.apply div b{font-weight:600}
+.effort{display:inline-flex;gap:3px;vertical-align:middle;margin-right:6px}
+.effort i{width:10px;height:10px;border-radius:2px;border:1px solid var(--line2)}
+.effort i.on{background:var(--ink2);border-color:var(--ink2)}
+.chart{display:grid;gap:6px}
+.chart svg{width:100%;height:84px;color:var(--ink2)}
+.chart .leg{display:flex;justify-content:space-between;font-size:12px;color:var(--mute)}
+.evi{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:13px}
+.evi li{display:flex;gap:10px;align-items:baseline}
+.evi .src{font-family:var(--mono);font-size:11.5px;color:var(--mute);min-width:52px}
+.evi a{overflow-wrap:anywhere}
+.acts{position:sticky;bottom:0;display:flex;gap:8px;flex-wrap:wrap;padding:12px 26px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface)}
+.acts .sp{flex:1}
+.back{display:none}
+
+.empty{padding:48px 26px;display:grid;gap:10px;justify-items:start;max-width:460px}
+.empty h3{margin:0;font-size:15px}
+.empty p{margin:0;color:var(--ink2)}
+.empty code{font-family:var(--mono);font-size:12.5px;background:var(--bg);border:1px solid var(--line);padding:1px 6px;border-radius:4px}
+.sk{list-style:none;margin:0;padding:6px 0}
+.sk li{padding:12px 18px;display:grid;gap:7px}
+.sk i{display:block;height:10px;border-radius:3px;background:linear-gradient(90deg,var(--line) 0,var(--surface) 50%,var(--line) 100%);background-size:200% 100%;animation:sk 1.2s linear infinite}
+@keyframes sk{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.sk i{animation:none}}
+
+/* System view: full width under the list header. */
+.sys{padding:18px;display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-items:start}
+.panel{background:var(--raised);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px}
+.panel h3{margin:0;font-size:13px;font-weight:600}
+.panel .hint{font-size:12.5px;color:var(--mute)}
+.funnel{display:grid;gap:5px}
+.funnel div{display:grid;grid-template-columns:96px 1fr 42px;gap:10px;align-items:center;font-size:12.5px}
+.funnel span{color:var(--ink2)}
+.funnel em{font-style:normal;text-align:right}
+.funnel i{display:block;height:8px;border-radius:2px;background:var(--ink2);min-width:2px}
+.funnel div:last-child i{background:var(--accent)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;margin:0}
+.kv dt{color:var(--mute)}.kv dd{margin:0;text-align:right}
+.alert{font-size:12.5px;border-radius:6px;padding:8px 10px;background:var(--warn-soft);color:var(--warn)}
+.alert.bad{background:color-mix(in srgb,var(--neg) 12%,transparent);color:var(--neg)}
+.qr{display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:start}
+.qr .code{background:#fff;border-radius:6px;padding:6px;border:1px solid var(--line)}
+.qr .code svg{display:block;width:100%;height:auto}
+.qr ol{margin:0;padding-left:18px;font-size:13px;display:grid;gap:4px}
+
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:8px;padding:8px 8px 8px 14px;display:flex;gap:12px;align-items:center;box-shadow:var(--shadow);transition:opacity .15s,transform .15s;z-index:20;max-width:calc(100vw - 32px)}
+#toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+#toast button{all:unset;cursor:pointer;color:var(--accent-soft);font-weight:600;padding:4px 8px;border-radius:4px}
+@media (prefers-color-scheme:dark){#toast button{color:var(--accent)}}
+.keys{font-size:12px;color:var(--mute);padding:0 8px;margin:0;display:grid;grid-template-columns:auto 1fr;gap:5px 10px;align-items:center}
+.keys dt{white-space:nowrap}.keys dd{margin:0}
+.keys kbd{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:3px;padding:0 4px;color:var(--ink2)}
+.tabbar,.topbar{display:none}
+.app.is-system .list{grid-column:2/4;border-right:0}
+.app.is-system .detail{display:none}
+
+/* Medium: rail collapses to icons. */
+@media (max-width:1180px){
+  .app{grid-template-columns:64px minmax(320px,1fr) minmax(380px,1.2fr)}
+  .rail{padding:14px 8px;align-items:center}
+  .brand span,.brand b,.nav .label,.nav .count,.status .txt,.status .tok,.keys{display:none}
+  .brand::before{content:"VH";font-weight:700;font-size:13px}
+  .nav button{justify-content:center;width:40px;height:36px;padding:0}
+  .status{padding:10px 0 0;justify-items:center}
+  .status .meter{width:36px}
+}
+@media (hover:none),(pointer:coarse){.keys{display:none}}
+
+/* Phone and small tablet: list full width, detail as a sheet, tab bar at the bottom. */
+@media (max-width:820px){
+  body{font-size:15px}
+  .app{display:block;height:auto;min-height:100vh;padding-bottom:calc(60px + env(safe-area-inset-bottom))}
+  .rail{display:none}
+  .topbar{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;background:var(--bg);border-bottom:1px solid var(--line)}
+  .topbar b{font-size:16px}
+  .topbar .st{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mute)}
+  .list{border-right:0}
+  .phead{padding:12px 16px 10px;border-bottom:1px solid var(--line)}
+  .phead h1{font-size:20px}
+  .scroll{overflow:visible}
+  .rowi{padding:12px 16px}
+  .rowi .t{font-size:15px}
+  .rowi .w{font-size:14px}
+  .detail{position:fixed;inset:0;z-index:10;transform:translateX(100%);transition:transform .2s ease;visibility:hidden}
+  body.sheet .detail{transform:none;visibility:visible}
+  .detail .scroll{overflow:auto}
+  .back{display:flex;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top)) 10px 8px;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:2}
+  .dbody{padding:18px 16px 24px}
+  .dtop h2{font-size:21px}
+  .cardgrid{grid-template-columns:1fr;gap:2px}
+  .cardgrid dd{margin-bottom:10px}
+  .acts{padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
+  .acts .btn{height:40px;flex:1}
+  .acts .sp{display:none}
+  .sys{padding:14px 16px;grid-template-columns:1fr}
+  .qr{grid-template-columns:1fr}
+  .qr .code{max-width:280px}
+  .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  .tabbar button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:2px;padding:8px 0 7px;font-size:11.5px;color:var(--mute)}
+  .tabbar button svg{width:20px;height:20px}
+  .tabbar button[aria-selected=true]{color:var(--ink);font-weight:600}
+  .tabbar button[aria-selected=true] svg{color:var(--accent)}
+  #toast{bottom:calc(72px + env(safe-area-inset-bottom))}
+  body.sheet #toast{bottom:calc(72px + env(safe-area-inset-bottom))}
+}
+@media (prefers-reduced-motion:reduce){.detail{transition:none}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-today" viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10.5" rx="1.5"/><path d="M2.5 6.5h11M5.5 1.8v2.4M10.5 1.8v2.4"/></symbol>
+  <symbol id="i-kept" viewBox="0 0 16 16"><path d="M4 2.5h8v11l-4-2.8-4 2.8z"/></symbol>
+  <symbol id="i-explore" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></symbol>
+  <symbol id="i-system" viewBox="0 0 16 16"><path d="M2 12.5h12M4 12.5V8M8 12.5V3.5M12 12.5V6"/></symbol>
+  <symbol id="i-run" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8"/></symbol>
+  <symbol id="i-out" viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v3.5a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V5a.5.5 0 0 1 .5-.5h3.5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="m3 8.5 3.2 3L13 4.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16"><path d="M10 3 5 8l5 5"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 16 16"><rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/><path d="M7 12.2h2"/></symbol>
+</svg>
+
+<div class="app" id="app">
+  <aside class="rail" aria-label="Điều hướng">
+    <div class="brand"><b>VHub Trend</b><span>Scan</span></div>
+    <nav class="nav" id="nav" role="tablist" aria-label="Màn hình"></nav>
+    <dl class="keys" aria-label="Phím tắt"><dt><kbd>J</kbd> <kbd>K</kbd></dt><dd>lên, xuống</dd><dt><kbd>E</kbd> <kbd>X</kbd> <kbd>S</kbd></dt><dd>giữ, bỏ, hoãn</dd><dt><kbd>O</kbd></dt><dd>mở trang gốc</dd><dt><kbd>/</kbd></dt><dd>tìm</dd><dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>đổi màn hình</dd></dl>
+    <div class="status" id="status"></div>
+  </aside>
+
+  <header class="topbar">
+    <b>VHub Trend</b>
+    <span class="st" id="topstatus"></span>
+    <button class="btn ghost sm" id="runnow2" aria-label="Chạy ngay"><svg class="i"><use href="#i-run"/></svg></button>
+  </header>
+
+  <section class="pane list" aria-labelledby="ptitle">
+    <div class="phead">
+      <div><h1 id="ptitle">Hôm nay</h1><div class="sub" id="psub"></div></div>
+      <label class="search" id="searchbox" hidden><svg class="i" aria-hidden="true"><use href="#i-explore"/></svg><span class="sr">Tìm</span><input id="q" type="search" placeholder="Tìm theo tên, mô tả, chủ đề" autocomplete="off"></label>
+    </div>
+    <div class="scroll" id="listview" aria-live="polite"></div>
+  </section>
+
+  <section class="pane detail" id="detail" aria-label="Chi tiết">
+    <div class="back"><button class="btn ghost" id="closesheet"><svg class="i"><use href="#i-back"/></svg>Danh sách</button></div>
+    <div class="scroll" id="detailview"></div>
+    <div class="acts" id="acts" hidden></div>
+  </section>
+
+  <nav class="tabbar" id="tabbar" role="tablist" aria-label="Màn hình"></nav>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const TABS = [
+  { k: "today", t: "Hôm nay", icon: "today" },
+  { k: "kept", t: "Đã giữ", icon: "kept" },
+  { k: "explore", t: "Khám phá", icon: "explore" },
+  { k: "system", t: "Hệ thống", icon: "system" },
+];
+const STATE_LABEL = { new: "Mới", kept: "Đã giữ", skipped: "Đã bỏ", snoozed: "Đang hoãn", trying: "Đang thử", done: "Xong" };
+const EFFORT = { S: ["Nhỏ", 1], M: ["Vừa", 2], L: ["Lớn", 3] };
+const ui = { tab: "today", items: [], sel: 0, health: null, detail: null, loading: true, error: null };
+const phone = matchMedia("(max-width: 820px)");
+
+// The token arrives once in the URL (printed by `trend serve`), is kept in this browser, and removed from the address bar.
+const url = new URL(location.href);
+if (url.searchParams.get("t")) { try { localStorage.setItem("trendToken", url.searchParams.get("t")); } catch {} url.searchParams.delete("t"); history.replaceState(null, "", url.pathname); }
+const token = (() => { try { return localStorage.getItem("trendToken") || ""; } catch { return ""; } })();
+
+class AuthError extends Error {}
+async function api(path, opt = {}) {
+  const r = await fetch(path, { ...opt, headers: { authorization: "Bearer " + token, "content-type": "application/json" } });
+  if (r.status === 401) throw new AuthError("Trình duyệt này chưa có mã truy cập.");
+  if (!r.ok && r.status !== 202 && r.status !== 409) throw new Error("Máy chủ trả lỗi " + r.status);
+  return r.json();
+}
+
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat(Infinity)) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+}
+function icon(name, cls = "i") { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("class", cls); s.setAttribute("aria-hidden", "true"); const u = document.createElementNS(s.namespaceURI, "use"); u.setAttribute("href", "#i-" + name); s.append(u); return s; }
+const safeHref = (u) => (/^https?:\/\//i.test(u || "") ? u : null);
+const fmt = new Intl.NumberFormat("vi-VN");
+const compact = new Intl.NumberFormat("vi-VN", { notation: "compact", maximumFractionDigits: 1 });
+function ago(iso) {
+  if (!iso) return "chưa có";
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "vừa xong"; if (m < 60) return m + " phút trước";
+  const hr = Math.round(m / 60); if (hr < 24) return hr + " giờ trước";
+  const d = Math.round(hr / 24); return d < 8 ? d + " ngày trước" : new Date(iso).toLocaleDateString("vi-VN");
+}
+const dayLabel = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "numeric" }) : "";
+const metricOf = (it) => it.stars != null ? { v: it.stars, u: "sao" } : it.points != null ? { v: it.points, u: "điểm" } : null;
+
+/* ---------- toast with undo ---------- */
+function toast(text, undo) {
+  const t = $("#toast"); t.replaceChildren(h("span", {}, text));
+  if (undo) t.append(h("button", { onclick: () => { t.classList.remove("on"); undo(); } }, "Hoàn tác"));
+  t.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 6000);
+}
+
+/* ---------- actions (non-destructive: every one can be undone) ---------- */
+const BACK = { new: "reset", kept: "keep", skipped: "skip", snoozed: "snooze", trying: "trying", done: "done" };
+async function act(it, action, label) {
+  if (!it) return;
+  const prev = it.userState;
+  try {
+    await api("/api/feedback", { method: "POST", body: JSON.stringify({ id: it.id, action, days: 7 }) });
+  } catch (e) { return toast("Chưa lưu được: " + e.message); }
+  toast(label, async () => { await api("/api/feedback", { method: "POST", body: JSON.stringify({ id: it.id, action: BACK[prev] || "reset" }) }); load(); });
+  // Leaving the current list moves the selection to the next item, so triage stays one key per item.
+  await load({ keepIndex: true });
+}
+function actionsFor(it) {
+  if (!it) return [];
+  if (ui.tab === "kept") return [
+    ["trying", "Đang thử", "check", "Đã chuyển sang Đang thử", it.userState === "trying"],
+    ["done", "Xong", "check", "Đã đánh dấu xong"],
+    ["skip", "Bỏ", "x", "Đã bỏ"],
+  ];
+  return [
+    ["keep", "Giữ", "check", "Đã giữ", it.userState === "kept"],
+    ["skip", "Bỏ", "x", "Đã bỏ"],
+    ["snooze", "Hoãn 7 ngày", "clock", "Sẽ hiện lại sau 7 ngày"],
+  ];
+}
+
+/* ---------- navigation ---------- */
+function renderNav() {
+  const counts = ui.health ? { today: ui.health.digestCount, kept: (ui.health.userStates.kept || 0) + (ui.health.userStates.trying || 0), explore: ui.health.userStates.new || 0 } : {};
+  const mk = (rail) => TABS.map((t, i) => h("button", {
+    role: "tab", "aria-selected": String(ui.tab === t.k), title: rail ? `${t.t} (${i + 1})` : null,
+    onclick: () => go(t.k),
+  }, icon(t.icon), h("span", { class: "label" }, t.t), rail && counts[t.k] != null ? h("span", { class: "count num" }, fmt.format(counts[t.k])) : null));
+  $("#nav").replaceChildren(...mk(true));
+  $("#tabbar").replaceChildren(...mk(false));
+}
+function go(tab) {
+  if (ui.tab === tab) return;
+  ui.tab = tab; ui.sel = 0; closeSheet(true);
+  $("#q").value = "";
+  load();
+}
+
+/* ---------- status (rail + phone top bar) ---------- */
+function renderStatus() {
+  const s = ui.health; const box = $("#status");
+  if (!s) { box.replaceChildren(); $("#topstatus").replaceChildren(); return; }
+  const r = s.lastRun; const used = s.tokens.inTokens + s.tokens.outTokens; const pct = Math.min(100, Math.round(used / Math.max(1, s.tokens.limit) * 100));
+  const cls = !r ? "" : r.status === "ok" ? "ok" : r.status === "running" ? "run" : r.status === "failed" ? "bad" : "run";
+  const runText = !r ? "Chưa chạy lần nào" : r.status === "running" ? "Đang chạy…" : (r.status === "ok" ? "Quét " : "Lỗi · ") + ago(r.started_at);
+  const sync = s.cloud ? (s.cloud.last ? (s.cloud.last.ok ? "Cloud · " + ago(s.cloud.last.at) : "Cloud lỗi") : "Cloud · chưa đồng bộ") : null;
+  box.replaceChildren(
+    h("div", { class: "row", title: r && r.error ? r.error : null }, h("span", { class: "dot " + cls }), h("span", { class: "txt" }, runText)),
+    sync && h("div", { class: "row" }, h("span", { class: "dot " + (s.cloud.last && !s.cloud.last.ok ? "bad" : s.cloud.last ? "ok" : "") }), h("span", { class: "txt" }, sync)),
+    h("div", { class: "tok" }, h("div", { class: "row" }, h("span", {}, "Token hôm nay"), h("span", { class: "num", style: "margin-left:auto" }, pct + "%")), h("div", { class: "meter" + (pct > 85 ? " hot" : "") }, h("i", { style: `width:${pct}%` }))),
+    h("button", { class: "btn", id: "runnow", onclick: runNow, title: "Chạy ngay một lần quét" }, icon("run"), h("span", { class: "txt" }, "Chạy ngay")),
+  );
+  $("#topstatus").replaceChildren(h("span", { class: "dot " + cls }), runText);
+}
+async function runNow() {
+  try {
+    const r = await api("/api/run", { method: "POST", body: "{}" });
+    toast(r.started ? "Đã bắt đầu quét. Danh sách tự cập nhật khi xong." : "Chưa chạy được: " + (r.reason === "already running" ? "đang có lần quét khác" : r.reason || "không rõ"));
+    if (r.started) poll();
+  } catch (e) { toast(e.message); }
+}
+function poll() { clearTimeout(poll.t); poll.t = setTimeout(async () => { await load({ keepIndex: true }); if (ui.health && ui.health.lastRun && ui.health.lastRun.status === "running") poll(); }, 8000); }
+
+/* ---------- list ---------- */
+function scoreBars(n) {
+  const s = n == null ? 0 : n;
+  return h("span", { class: "score s" + s, title: n == null ? "Chưa chấm" : `Điểm AI ${s}/3`, "aria-label": n == null ? "Chưa chấm" : `Điểm ${s} trên 3` }, n == null ? "–" : String(s));
+}
+function gain(it) {
+  const s = it.series || [];
+  if (s.length < 2) return null;
+  const d = s[s.length - 1] - s[0];
+  return d > 0 ? d : null;
+}
+function row(it, i) {
+  const m = metricOf(it); const g = gain(it);
+  return h("li", { class: "rowi", role: "option", "aria-selected": String(i === ui.sel), "data-i": i, onclick: () => select(i, true) },
+    scoreBars(it.triage.score),
+    h("div", { class: "t" }, it.title),
+    h("div", { class: "delta num" }, m ? [h("b", {}, compact.format(m.v)), " ", m.u] : null, g ? h("div", {}, "+" + fmt.format(g)) : null),
+    h("div", { class: "w" }, it.triage.why || it.description),
+    h("div", { class: "m" },
+      it.sources.join(" + "),
+      it.triage.cat && h("span", {}, it.triage.cat),
+      it.card && h("span", {}, "Nỗ lực " + (EFFORT[it.card.effort] || [it.card.effort])[0].toLowerCase()),
+      it.userState !== "new" && h("span", { class: "st " + it.userState }, STATE_LABEL[it.userState] || it.userState)));
+}
+function skeleton() { return h("ul", { class: "sk", "aria-busy": "true", "aria-label": "Đang tải" }, [0, 1, 2, 3, 4].map((i) => h("li", {}, h("i", { style: `width:${55 + (i * 13) % 35}%` }), h("i", { style: "width:92%" }), h("i", { style: "width:40%" })))); }
+function empty(title, text, extra) { return h("div", { class: "empty" }, h("h3", {}, title), h("p", {}, text), extra || null); }
+
+function renderList() {
+  const v = $("#listview"); const tab = TABS.find((t) => t.k === ui.tab);
+  $("#ptitle").textContent = tab.t;
+  $("#searchbox").hidden = ui.tab !== "explore";
+  $("#app").classList.toggle("is-system", ui.tab === "system");
+  if (ui.error) {
+    v.replaceChildren(ui.error instanceof AuthError
+      ? empty("Cần mã truy cập", "Mở lại đúng đường link mà lệnh dashboard in ra trong terminal (có đoạn ?t=...). Trình duyệt sẽ nhớ mã cho lần sau.", h("code", {}, "npm run dashboard"))
+      : empty("Không tải được dữ liệu", "Kiểm tra cửa sổ terminal đang chạy dashboard còn mở không. " + ui.error.message, h("button", { class: "btn", onclick: () => load() }, "Thử lại")));
+    $("#psub").textContent = ""; return;
+  }
+  if (ui.loading && !ui.items.length && ui.tab !== "system") { v.replaceChildren(skeleton()); return; }
+  if (ui.tab === "system") return renderSystem(v);
+  const sub = ui.tab === "today" ? (ui.day ? `${dayLabel(ui.day)} · ${ui.items.length} ý` : "") : ui.tab === "kept" ? `${ui.items.length} ý đang giữ hoặc đang thử` : $("#q").value ? `${ui.items.length} kết quả` : "Ý đã phân tích, xếp theo điểm";
+  $("#psub").textContent = sub;
+  if (!ui.items.length) {
+    const lr = ui.health && ui.health.lastRun;
+    v.replaceChildren(ui.tab === "today"
+      ? (lr ? empty("Hôm nay không có ý nào đáng xem", "Lần quét gần nhất không tìm thấy gì vượt ngưỡng. Không có gì thì không làm phiền bạn.", h("button", { class: "btn", onclick: () => go("explore") }, "Xem toàn bộ ý đã phân tích"))
+            : empty("Chưa quét lần nào", "Chạy lần quét đầu tiên trong terminal, hoặc bấm Chạy ngay (vài phút).", h("code", {}, "npm run scan")))
+      : ui.tab === "kept" ? empty("Chưa giữ ý nào", "Bấm Giữ (phím E) ở Hôm nay hoặc Khám phá. Ý đã giữ nằm ở đây cho tới khi bạn đánh dấu Xong.")
+      : empty("Không có kết quả", $("#q").value ? "Thử từ khoá khác, ví dụ: calendar, cli, budget." : "Chưa có ý nào được phân tích."));
+    renderDetail(); return;
+  }
+  v.replaceChildren(h("ul", { class: "rows", role: "listbox", "aria-label": tab.t }, ui.items.map(row)));
+  renderDetail();
+}
+
+/* ---------- detail ---------- */
+function spark(series, unit) {
+  if (!series || series.length < 2) return h("div", { class: "mute", style: "font-size:13px" }, "Cần ít nhất 2 ngày số liệu để thấy xu hướng.");
+  const w = 600, ht = 84, pad = 4, max = Math.max(...series), min = Math.min(...series), span = Math.max(1, max - min);
+  const pts = series.map((y, i) => [pad + (i / (series.length - 1)) * (w - 2 * pad), ht - pad - ((y - min) / span) * (ht - 2 * pad)]);
+  const ns = "http://www.w3.org/2000/svg"; const s = document.createElementNS(ns, "svg");
+  s.setAttribute("viewBox", `0 0 ${w} ${ht}`); s.setAttribute("preserveAspectRatio", "none"); s.setAttribute("role", "img");
+  s.setAttribute("aria-label", `${unit}: từ ${series[0]} lên ${series[series.length - 1]} trong ${series.length} ngày`);
+  const area = document.createElementNS(ns, "path"); area.setAttribute("d", `M${pts[0][0]},${ht} L${pts.map((p) => p.join(",")).join(" L")} L${pts[pts.length - 1][0]},${ht} Z`); area.setAttribute("fill", "currentColor"); area.setAttribute("opacity", ".08");
+  const line = document.createElementNS(ns, "polyline"); line.setAttribute("points", pts.map((p) => p.join(",")).join(" ")); line.setAttribute("fill", "none"); line.setAttribute("stroke", "currentColor"); line.setAttribute("stroke-width", "1.6"); line.setAttribute("vector-effect", "non-scaling-stroke");
+  s.append(area, line);
+  const d = series[series.length - 1] - series[0];
+  return h("div", { class: "chart" }, s, h("div", { class: "leg num" }, h("span", {}, `${series.length} ngày trước: ${fmt.format(series[0])}`), h("span", {}, `Nay: ${fmt.format(series[series.length - 1])} ${unit} (${d >= 0 ? "+" : ""}${fmt.format(d)})`)));
+}
+async function select(i, open) {
+  ui.sel = Math.max(0, Math.min(ui.items.length - 1, i));
+  document.querySelectorAll(".rowi").forEach((r) => r.setAttribute("aria-selected", String(Number(r.dataset.i) === ui.sel)));
+  const el = document.querySelector(`.rowi[data-i="${ui.sel}"]`); if (el && !phone.matches) el.scrollIntoView({ block: "nearest" });
+  renderDetail();
+  if (open && phone.matches) openSheet();
+}
+function openSheet() { if (!document.body.classList.contains("sheet")) { document.body.classList.add("sheet"); history.pushState({ sheet: 1 }, ""); $("#detailview").scrollTop = 0; } }
+function closeSheet(silent) { if (document.body.classList.contains("sheet")) { document.body.classList.remove("sheet"); if (!silent && history.state && history.state.sheet) history.back(); } }
+addEventListener("popstate", () => document.body.classList.remove("sheet"));
+
+async function renderDetail() {
+  const v = $("#detailview"); const acts = $("#acts");
+  const it = ui.tab === "system" ? null : ui.items[ui.sel];
+  if (!it) {
+    acts.hidden = true;
+    v.replaceChildren(ui.tab === "system" ? h("div") : empty("Chọn một ý để xem chi tiết", "Dùng J/K để đi qua danh sách, E để giữ, X để bỏ."));
+    return;
+  }
+  const c = it.card; const m = metricOf(it); const href = safeHref(it.url);
+  const body = h("div", { class: "dbody" },
+    h("div", { class: "dtop" },
+      h("h2", {}, it.title),
+      it.description && h("div", { class: "desc" }, it.description),
+      h("div", { class: "facts num" },
+        it.triage.score != null && h("span", {}, "Điểm AI ", h("b", {}, it.triage.score + "/3")),
+        m && h("span", {}, h("b", {}, fmt.format(m.v)), " " + m.u),
+        it.triage.cat && h("span", {}, it.triage.cat),
+        it.license && h("span", {}, it.license),
+        h("span", {}, "Thấy " + ago(it.firstSeen)),
+        it.userState !== "new" && h("span", {}, h("b", {}, STATE_LABEL[it.userState])))),
+    it.triage.why && h("div", { class: "why" }, h("small", {}, "Vì sao đáng xem"), it.triage.why, it.shownReason ? h("span", { class: "mute" }, " · " + it.shownReason) : null),
+    c ? h("section", { class: "sec" }, h("h3", {}, "Phân tích"),
+      h("dl", { class: "cardgrid" },
+        h("dt", {}, "Là gì"), h("dd", {}, c.what),
+        h("dt", {}, "Đáng học"), h("dd", {}, c.learn),
+        c.apply && c.apply.length ? [h("dt", {}, "Áp dụng"), h("dd", { class: "apply" }, c.apply.map((a) => h("div", {}, h("b", {}, a.project), " — ", a.how)))] : null,
+        h("dt", {}, "Nỗ lực"), h("dd", {}, h("span", { class: "effort", "aria-hidden": "true" }, [1, 2, 3].map((k) => h("i", { class: (EFFORT[c.effort] || [0, 0])[1] >= k ? "on" : "" }))), (EFFORT[c.effort] || [c.effort])[0]),
+        h("dt", {}, "Lưu ý"), h("dd", {}, c.risk)))
+      : h("div", { class: "mute", style: "font-size:13px" }, "Chưa có thẻ phân tích chi tiết: ý này chưa vào nhóm điểm cao của lần quét."),
+    h("section", { class: "sec" }, h("h3", {}, m ? (m.u === "sao" ? "Sao GitHub theo ngày" : "Điểm HN theo ngày") : "Xu hướng"), h("div", { id: "chart" }, it.series ? spark(it.series, m ? m.u : "") : h("div", { class: "mute" }, "…"))),
+    h("section", { class: "sec" }, h("h3", {}, "Nguồn"), h("ul", { class: "evi", id: "evidence" }, it.sources.map((s) => h("li", {}, h("span", { class: "src" }, s), href ? h("a", { href, target: "_blank", rel: "noopener noreferrer" }, it.url) : it.url)))));
+  v.replaceChildren(body); v.scrollTop = 0;
+  acts.hidden = false;
+  acts.replaceChildren(
+    ...actionsFor(it).map(([a, t, ic, msg, on], idx) => h("button", { class: "btn" + (idx === 0 ? " keep" : ""), "aria-pressed": on ? "true" : null, onclick: () => act(it, a, msg) }, icon(ic), t)),
+    h("span", { class: "sp" }),
+    href && h("a", { class: "btn ghost", href, target: "_blank", rel: "noopener noreferrer" }, icon("out"), "Mở"));
+  // Evidence and the daily series come from the entity endpoint (the list does not carry them).
+  const id = it.id;
+  try {
+    const d = await api("/api/entity?id=" + encodeURIComponent(id));
+    if (ui.items[ui.sel] !== it) return;
+    const series = d.observations.map((o) => o.stars ?? o.points ?? 0);
+    it.series = series;
+    const ch = $("#chart"); if (ch) ch.replaceChildren(spark(series, m ? m.u : ""));
+    const ev = $("#evidence");
+    if (ev) ev.replaceChildren(...d.sightings.map((s) => h("li", {}, h("span", { class: "src" }, s.source), safeHref(s.url) ? h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.url) : s.url)));
+  } catch { /* detail stays usable without the extras */ }
+}
+
+/* ---------- system ---------- */
+function panel(title, ...kids) { return h("section", { class: "panel" }, h("h3", {}, title), ...kids); }
+async function renderSystem(v) {
+  const s = ui.health; const r = s.lastRun; const st = (r && r.stats) || {};
+  $("#psub").textContent = r ? `Lần quét gần nhất ${ago(r.started_at)}` : "Chưa có lần quét nào";
+  const steps = [["Thu thập", st.collected], ["Thực thể mới", st.created], ["Phân loại AI", st.triaged], ["Thẻ chi tiết", st.carded], ["Vào digest", st.digest]];
+  const top = Math.max(1, ...steps.map((x) => x[1] || 0));
+  const used = s.tokens.inTokens + s.tokens.outTokens; const pct = Math.min(100, Math.round(used / Math.max(1, s.tokens.limit) * 100));
+  const drops = Object.entries(st.dropped || {}).sort((a, b) => b[1] - a[1]);
+  const panels = [
+    panel("Lần quét gần nhất",
+      r ? h("div", { class: "funnel num", role: "img", "aria-label": steps.map(([k, n]) => `${k} ${n ?? 0}`).join(", ") }, steps.map(([k, n]) => h("div", {}, h("span", {}, k), h("i", { style: `width:${Math.round(((n || 0) / top) * 100)}%` }), h("em", {}, fmt.format(n || 0)))))
+        : h("p", { class: "hint" }, "Chưa có lần quét nào. Bấm Chạy ngay hoặc chạy npm run scan."),
+      r && h("dl", { class: "kv num" }, h("dt", {}, "Bắt đầu"), h("dd", {}, new Date(r.started_at).toLocaleString("vi-VN")), h("dt", {}, "Trạng thái"), h("dd", {}, r.status), h("dt", {}, "Gộp trùng"), h("dd", {}, fmt.format(st.merged || 0)), h("dt", {}, "Gọi AI / dùng lại cache"), h("dd", {}, `${st.llmCalls ?? 0} / ${st.cacheHits ?? 0}`)),
+      r && r.error ? h("div", { class: "alert bad" }, r.error) : null,
+      st.degraded && st.degraded.length ? h("div", { class: "alert" }, "Chế độ hạ cấp: " + st.degraded.join(", ")) : null,
+      st.sourceErrors && st.sourceErrors.length ? h("div", { class: "alert bad" }, "Lỗi nguồn: " + st.sourceErrors.join("; ")) : null),
+    panel("Token AI hôm nay",
+      h("div", { class: "meter" + (pct > 85 ? " hot" : ""), style: "height:8px;border-radius:3px" }, h("i", { style: `width:${pct}%` })),
+      h("dl", { class: "kv num" }, h("dt", {}, "Đã dùng"), h("dd", {}, `${fmt.format(used)} / ${fmt.format(s.tokens.limit)}`), h("dt", {}, "Số lần gọi"), h("dd", {}, fmt.format(s.tokens.calls)), h("dt", {}, "Quy ra giá API"), h("dd", {}, "$" + s.tokens.costUsd.toFixed(4))),
+      h("p", { class: "hint" }, "Hết hạn mức thì các bước AI tạm dừng, lần quét vẫn kết thúc bình thường.")),
+    panel("Bị loại bởi luật",
+      drops.length ? h("dl", { class: "kv num" }, drops.map(([k, n]) => [h("dt", {}, k), h("dd", {}, fmt.format(n))])) : h("p", { class: "hint" }, "Lần quét gần nhất không loại mục nào."),
+      h("dl", { class: "kv num" }, Object.entries(s.userStates || {}).map(([k, n]) => [h("dt", {}, STATE_LABEL[k] || k), h("dd", {}, fmt.format(n))]))),
+    panel("Cloud",
+      s.cloud
+        ? h("dl", { class: "kv num" }, h("dt", {}, "Project"), h("dd", {}, s.cloud.projectId), h("dt", {}, "Đồng bộ gần nhất"), h("dd", {}, s.cloud.last ? ago(s.cloud.last.at) : "chưa"), h("dt", {}, "Chu kỳ"), h("dd", {}, s.cloud.syncMinutes + " phút"), s.cloud.last && [h("dt", {}, "Thao tác từ điện thoại"), h("dd", {}, fmt.format(s.cloud.last.applied))])
+        : h("p", { class: "hint" }, "Chưa bật. Điện thoại vẫn xem được khi cùng Wi-Fi. Muốn xem cả khi ra ngoài (miễn phí): làm theo infra/README.md."),
+      s.cloud && s.cloud.last && !s.cloud.last.ok ? h("div", { class: "alert bad" }, s.cloud.last.error || "Đồng bộ lỗi") : null),
+  ];
+  const pairPanel = panel("Kết nối điện thoại", h("p", { class: "hint" }, "Đang tạo mã…"));
+  pairPanel.id = "pair";
+  v.replaceChildren(h("div", { class: "sys" }, pairPanel, ...panels));
+  renderDetail();
+  try {
+    const p = await api("/api/pair");
+    const svg = new DOMParser().parseFromString(p.svg, "image/svg+xml").documentElement;
+    const steps = h("ol", {},
+      h("li", {}, "Cài app VHub Trend (file APK trong mục Releases của repo)."),
+      h("li", {}, "Mở app → Kết nối với PC → Quét mã."),
+      h("li", {}, p.cloud ? "Xong. Ở nhà app nói chuyện thẳng với PC; ra ngoài dùng bản trên cloud." : "Xong. App xem được khi cùng Wi-Fi với PC (cloud chưa bật)."));
+    pairPanel.replaceChildren(...[h("h3", {}, "Kết nối điện thoại"),
+      p.lanReachable ? null : h("div", { class: "alert" }, "Dashboard đang chỉ mở cho máy này. Tắt rồi chạy lại: npm run dashboard -- --lan, để điện thoại cùng Wi-Fi vào được."),
+      h("div", { class: "qr" }, h("div", { class: "code" }, document.importNode(svg, true)), h("div", { style: "display:grid;gap:8px" }, steps,
+        h("p", { class: "hint" }, `Mã hết hạn lúc ${new Date(p.expiresAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}. Ai quét được mã này thì xem và sửa được danh sách của bạn.`),
+        h("div", {}, h("button", { class: "btn sm", onclick: async () => { try { await navigator.clipboard.writeText(p.code); toast("Đã chép mã. Dán vào app nếu không quét được."); } catch { toast("Trình duyệt không cho chép; dùng npm run pair."); } } }, "Chép mã dạng chữ"))))].filter(Boolean));
+  } catch (e) {
+    pairPanel.replaceChildren(h("h3", {}, "Kết nối điện thoại"), h("p", { class: "hint" }, "Phiên bản dashboard này chưa tạo được mã ghép nối. Chạy npm run pair trong terminal."));
+  }
+}
+
+/* ---------- data ---------- */
+async function load(o = {}) {
+  const prevId = ui.items[ui.sel] && ui.items[ui.sel].id; const prevSel = ui.sel;
+  ui.loading = true; ui.error = null;
+  if (!o.keepIndex) renderList();
+  try {
+    const hl = await api("/api/health");
+    let items = [], day = null;
+    if (ui.tab === "today") { const d = await api("/api/digest"); items = d.items; day = d.day; hl.digestCount = items.length; }
+    else if (ui.tab === "kept") { const [a, b] = await Promise.all([api("/api/entities?state=kept&limit=200"), api("/api/entities?state=trying&limit=200")]); items = [...b.items, ...a.items]; }
+    else if (ui.tab === "explore") { items = (await api("/api/entities?limit=80&q=" + encodeURIComponent($("#q").value))).items; }
+    if (hl.digestCount == null && ui.health) hl.digestCount = ui.health.digestCount;
+    ui.health = hl; ui.items = items; ui.day = day;
+    const keep = items.findIndex((x) => x.id === prevId);
+    ui.sel = keep >= 0 ? keep : Math.min(o.keepIndex ? prevSel : 0, Math.max(0, items.length - 1));
+  } catch (e) { ui.error = e; }
+  ui.loading = false;
+  renderNav(); renderStatus(); renderList();
+}
+
+$("#q").addEventListener("input", () => { clearTimeout(load.t); load.t = setTimeout(() => load(), 220); });
+$("#closesheet").addEventListener("click", () => closeSheet());
+$("#runnow2").addEventListener("click", runNow);
+document.addEventListener("keydown", (ev) => {
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if (ev.target.closest("input")) { if (ev.key === "Escape") ev.target.blur(); return; }
+  const k = ev.key.toLowerCase(); const it = ui.items[ui.sel];
+  if (/^[1-4]$/.test(k)) return go(TABS[Number(k) - 1].k);
+  if (k === "/") { ev.preventDefault(); if (ui.tab !== "explore") go("explore"); setTimeout(() => $("#q").focus(), 0); return; }
+  if (k === "escape") return closeSheet();
+  if (ui.tab === "system" || !ui.items.length) return;
+  if (k === "j" || k === "arrowdown") { ev.preventDefault(); select(ui.sel + 1); }
+  else if (k === "k" || k === "arrowup") { ev.preventDefault(); select(ui.sel - 1); }
+  else if (k === "enter") select(ui.sel, true);
+  else if (k === "o" && safeHref(it.url)) window.open(it.url, "_blank", "noopener");
+  else if (k === "e") act(it, ui.tab === "kept" ? "trying" : "keep", ui.tab === "kept" ? "Đã chuyển sang Đang thử" : "Đã giữ");
+  else if (k === "x") act(it, "skip", "Đã bỏ");
+  else if (k === "s" && ui.tab !== "kept") act(it, "snooze", "Sẽ hiện lại sau 7 ngày");
+});
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load({ keepIndex: true }); });
+renderNav();
+load();
+</script>
+</body>
+</html>
