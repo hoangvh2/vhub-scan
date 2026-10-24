@@ -1,5 +1,6 @@
 package com.vh.trend.ui
 
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
@@ -47,7 +48,8 @@ class ScreensTest {
         var unpaired = 0
         rule.setContent { TrendTheme { TrendApp(Fixtures.ui(tab = Tab.System), object : UiActions { override fun unpair() { unpaired++ } }, Fixtures.now) } }
         rule.onNodeWithTag("unpair").performScrollTo().performClick()
-        rule.onRoot().captureRoboImage("build/screenshots/phone-unpair-confirm.png")
+        // The dialog is its own window, so onRoot() would match two roots; capture the dialog itself.
+        rule.onNode(isDialog()).captureRoboImage("build/screenshots/phone-unpair-confirm.png")
         rule.onNodeWithTag("unpair-cancel").performClick()
         rule.waitForIdle()
         assertEquals(0, unpaired)
