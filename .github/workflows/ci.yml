@@ -74,3 +74,30 @@ jobs:
           npm ci --prefix tests
       - name: Firestore rules and PC-phone sync against the emulators
         run: npm test --prefix tests
+
+  dashboard:
+    name: Dashboard screenshots (desktop + phone, light + dark)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tests/package-lock.json
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix tests
+          npx --prefix tests playwright install --with-deps chromium
+      - name: Render with sample data; fail on console errors or horizontal overflow
+        run: npm run screens --prefix tests -- "$PWD/dashboard-screens"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dashboard-screens
+          path: dashboard-screens/
+          if-no-files-found: ignore
