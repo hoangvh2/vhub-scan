@@ -16,8 +16,14 @@ New-Item -ItemType Directory -Force -Path $dir | Out-Null
 if (Test-Path $ks) {
   Write-Host "Đã có khóa tại $ks — không tạo đè (mất khóa cũ = không cập nhật được app đã cài)."
   if (-not $Upload) { exit 1 }
-  $sec = Read-Host 'Mật khẩu keystore hiện có' -AsSecureString
-  $pass = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+  $passFile = Join-Path $dir 'android-release.password'
+  if (Test-Path $passFile) {
+    $pass = (Get-Content -Raw $passFile).Trim()
+    Write-Host "Dùng lại mật khẩu đã lưu ở $passFile"
+  } else {
+    $sec = Read-Host 'Mật khẩu keystore hiện có' -AsSecureString
+    $pass = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+  }
 } else {
   $chars = [char[]]'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   $bytes = New-Object byte[] 32
@@ -35,11 +41,23 @@ $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($ks))
 
 if ($Upload) {
   if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw "Thiếu GitHub CLI (gh). Cài từ https://cli.github.com rồi 'gh auth login'." }
-  $b64   | gh secret set ANDROID_KEYSTORE_BASE64   --repo $repo
-  $pass  | gh secret set ANDROID_KEYSTORE_PASSWORD --repo $repo
-  $alias | gh secret set ANDROID_KEY_ALIAS         --repo $repo
-  $pass  | gh secret set ANDROID_KEY_PASSWORD      --repo $repo
-  Write-Host "Đã đặt 4 secret cho $repo. Lần chạy workflow Android kế tiếp sẽ ký bằng khóa thật."
+  # Native commands do not stop the script on failure, so every call is checked.
+  & gh auth status *> $null
+  if ($LASTEXITCODE -ne 0) { throw "gh chưa đăng nhập. Chạy 'gh auth login' rồi chạy lại script." }
+  $secrets = [ordered]@{
+    ANDROID_KEYSTORE_BASE64   = $b64
+    ANDROID_KEYSTORE_PASSWORD = $pass
+    ANDROID_KEY_ALIAS         = $alias
+    ANDROID_KEY_PASSWORD      = $pass
+  }
+  foreach ($name in $secrets.Keys) {
+    & gh secret set $name --repo $repo --body $secrets[$name]
+    if ($LASTEXITCODE -ne 0) { throw "Không đặt được secret $name cho $repo (gh báo lỗi ở trên). Kiểm tra quyền ghi secrets của tài khoản gh." }
+  }
+  $have = (& gh secret list --repo $repo) -join "`n"
+  $missing = $secrets.Keys | Where-Object { $have -notmatch "(?m)^$_\s" }
+  if ($missing) { throw "Đã đặt nhưng chưa thấy trong 'gh secret list': $($missing -join ', ')" }
+  Write-Host "Đã đặt và kiểm tra đủ 4 secret trên $repo. Lần chạy workflow Android kế tiếp sẽ ký bằng khóa thật."
 } else {
   $b64file = Join-Path $dir 'android-release.b64'
   Set-Content -NoNewline -Path $b64file -Value $b64
