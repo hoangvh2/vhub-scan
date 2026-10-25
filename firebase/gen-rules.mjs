@@ -17,13 +17,20 @@ export function parseEmails(raw) {
   return emails;
 }
 
-export function renderRules(template, emails) {
-  if (!template.includes("__ALLOWED_EMAILS__")) throw new Error("template has no __ALLOWED_EMAILS__ placeholder");
-  return template.replaceAll("__ALLOWED_EMAILS__", emails.map((e) => `'${e}'`).join(", "));
+/** The run request ids the rules accept today: today() + '-1' ... today() + '-<scansPerDay>' (none when 0). */
+export function scanIds(scansPerDay) {
+  if (!Number.isInteger(scansPerDay) || scansPerDay < 0 || scansPerDay > 5) throw new Error("scans per day must be 0..5");
+  return Array.from({ length: scansPerDay }, (_, i) => `today() + '-${i + 1}'`).join(", ");
 }
 
-export function generate(raw) {
-  const out = renderRules(readFileSync(join(dir, "firestore.rules.tmpl"), "utf8"), parseEmails(raw));
+export function renderRules(template, emails, scansPerDay = 2) {
+  if (!template.includes("__ALLOWED_EMAILS__")) throw new Error("template has no __ALLOWED_EMAILS__ placeholder");
+  if (!template.includes("__SCAN_IDS__")) throw new Error("template has no __SCAN_IDS__ placeholder");
+  return template.replaceAll("__ALLOWED_EMAILS__", emails.map((e) => `'${e}'`).join(", ")).replaceAll("__SCAN_IDS__", scanIds(scansPerDay));
+}
+
+export function generate(raw, scansPerDay = Number(process.env.SCANS_PER_DAY ?? "2")) {
+  const out = renderRules(readFileSync(join(dir, "firestore.rules.tmpl"), "utf8"), parseEmails(raw), scansPerDay);
   writeFileSync(join(dir, "firestore.rules"), out);
   return out;
 }

@@ -16,6 +16,7 @@
     "sync": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js sync",
     "web:build": "node packages/pipeline/scripts/build-hosting.mjs",
     "web:deploy": "node packages/pipeline/scripts/deploy-hosting.mjs",
+    "cloud:function": "npm run build && node packages/pipeline/scripts/build-function.mjs",
     "pair": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js pair",
     "trend": "node --disable-warning=ExperimentalWarning packages/pipeline/dist/cli.js",
     "typecheck": "npm run typecheck -w @vhub/trend-pipeline",

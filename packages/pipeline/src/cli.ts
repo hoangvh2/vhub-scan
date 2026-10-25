@@ -169,6 +169,8 @@ async function main(): Promise<number> {
       let { deps, db, store, budget } = buildDeps(home, cfg);
       try {
         const cloud = buildCloud(home, { db, store, budget, log: (m) => console.log(m) });
+        // A scan done on the cloud while the PC was off is the starting point of this one.
+        if (cloud) await cloud.pullDb().catch((e: unknown) => console.log(`cloud: chưa lấy được dữ liệu quét trên cloud (${e instanceof Error ? e.message : e})`));
         // Settings changed on the phone since the last sync take effect in this run.
         const pulled = cloud ? await cloud.pullSettings().catch((e: unknown) => (console.log(`cloud: chưa lấy được cài đặt từ điện thoại (${e instanceof Error ? e.message : e})`), 0)) : 0;
         if (pulled) ({ deps, store, budget } = buildDeps(home, loadHomeConfig(home), { db }));
@@ -203,7 +205,10 @@ async function main(): Promise<number> {
           running = true;
           // Each run reads config.json again, so changes from the settings page apply without restarting the dashboard.
           const run = async () => {
-            if (cloud) await cloud.pullSettings().catch(() => 0);
+            if (cloud) {
+              await cloud.pullDb().catch(() => false);
+              await cloud.pullSettings().catch(() => 0);
+            }
             await runPipeline(buildDeps(home, loadHomeConfig(home), { db }).deps);
           };
           void run().catch(() => undefined).then(sync).finally(() => (running = false));

@@ -84,3 +84,47 @@ PC giữ `~/.vhub-trend/config.json`. Web và điện thoại sửa được cà
 3. Mọi lần đọc/ghi Firestore mang `Authorization: Bearer <ID token Firebase>`; rules quyết định theo email trong token.
 
 Thêm hoặc bớt người: sửa `allowed_emails`, `terraform apply`. Địa chỉ ngoài danh sách nhận 403 từ Firestore; web và app hiện địa chỉ bị từ chối cùng cách sửa. Cần Android: SHA-1 của khóa ký APK đăng ký trong Firebase, và 4 biến `FIREBASE_*` lúc build (xem `infra/README.md`).
+
+## Quét trên cloud (Gemini, tùy chọn)
+
+Bật bằng `cloud_scan = true` (xem `infra/README.md`, Bước 10). PC với Claude CLI vẫn là đường chính; cloud chỉ quét khi người dùng bấm.
+
+```
+web / app ──tạo──▶ owners/{uid}/runRequests/{day}-{n}
+                         │ Eventarc "document created"
+                         ▼
+                 Cloud Function vhub-trend-scan ──▶ Gemini API (key trong Secret Manager)
+                         │ tải / ghi trend.sqlite, đọc config.json
+                         ▼
+                 bucket <project>-vhub-trend-data ◀── PC gửi database + config mỗi lần sync
+```
+
+### Yêu cầu quét (`owners/{uid}/runRequests/{id}`)
+
+| Field | Ai ghi | Kiểu |
+|---|---|---|
+| `at` | client | int > 0, mili giây Unix lúc bấm |
+| `device` | client | string ≤ 40, không bắt buộc |
+| `status` | function | `running`, `done`, `failed`, `refused` |
+| `message`, `startedAt`, `finishedAt`, `model` | function | string |
+| `tokens`, `costUsd`, `llmCalls`, `triaged`, `carded`, `digest` | function | số (chỉ khi `done`) |
+
+- `id` = `{day}-{n}`, với `day = floor((ms + 7h) / 86 400 000)` (ngày theo giờ Việt Nam) và `n` = 1..`cloud_scans_per_day`. Rules chỉ cho **tạo** đúng các id của hôm nay, không cho sửa hay xoá, nên mỗi ngày tối đa `cloud_scans_per_day` yêu cầu dù client bị sửa. `cloud_scans_per_day = 0` chặn mọi yêu cầu mới.
+- Function kiểm tra lại id theo đồng hồ của nó; chạy đúng một lần cho mỗi yêu cầu (sự kiện lặp bị bỏ qua vì đã có `status`); không tự chạy lại khi lỗi; tối đa một lần quét cùng lúc. Yêu cầu cũ hơn 14 ngày bị xoá.
+- Client coi một yêu cầu không có `status`, hoặc `running` chưa quá 12 phút, là đang chạy và không cho bấm thêm.
+
+### Trao database giữa PC và cloud
+
+| Bước | Ai | Việc |
+|---|---|---|
+| Mỗi lần sync và trước mỗi lần quét | PC | Nếu bucket có bản mới hơn bản PC đã thấy (theo generation): nhập bản đó, giữ lại thao tác trên PC từ lần gửi trước (trừ mục mà cloud có thao tác muộn hơn), giữ nguyên trạng thái sync riêng của PC (`dbsync.*`, `sync.*`, `settings.remote`) |
+| Sau đó | PC | Gửi database lên nếu có thay đổi, với điều kiện generation chưa đổi; bị tranh thì nhập lại một lần rồi gửi. Gửi `config.json` khi nội dung đổi |
+| Khi quét | Cloud | Tải database và config, áp dụng inbox (chưa xoá), chạy pipeline với model Gemini, gửi lại **với generation lúc tải**. Nếu PC đã gửi trong lúc đó: bỏ kết quả, báo `failed`, inbox giữ nguyên để PC áp dụng. Thành công thì xoá inbox đã áp dụng và đăng snapshot |
+
+Database có cùng ngân sách token (`budget.dailyTokens`) và cache với PC, nên lần quét trên cloud không gọi lại model cho mục đã có kết quả.
+
+### Chi phí và kiểm soát
+
+- Giá Gemini theo bảng 2026-10-25 (`packages/pipeline/src/llm/gemini.ts`); chi phí mỗi lần quét được ghi vào `costUsd` của yêu cầu và vào ngân sách trong database. Ước tính khoảng 0,01–0,02 USD mỗi lần với `gemini-3.5-flash-lite`, tối đa 2 lần/ngày. Đây là ước tính, chưa đo trên project thật.
+- Các lớp chặn: rules (lượt/ngày), ngân sách token hằng ngày, `maxOutputTokens` mỗi lời gọi, thinking ở mức `minimal`, một instance, không retry sự kiện, tiền trả trước ở AI Studio (hết thì 402).
+- Key Gemini chỉ nằm trong Secret Manager (ghi bằng đối số write-only của Terraform), chỉ service account của function đọc được; không bao giờ tới web, APK hay log.

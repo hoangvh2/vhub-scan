@@ -12,6 +12,11 @@ rules_version = '2';
 //   /owners/{o}/settingsInbox/{id} a settings change made on the web or phone (create only). The patch is a JSON
 //                                 string; the PC validates every value against its settings catalogue and refuses
 //                                 settings marked PC-only (the Claude command, the port) before writing config.json
+//   /owners/{o}/runRequests/{day}-{n}  "Quét bằng Gemini" pressed on the web or phone (create only; the cloud scan
+//                                 function writes the outcome onto it). Only n = 1..scans per day for today's day
+//                                 number (Vietnam time) is accepted, so the daily limit holds even without the apps.
+//                                 The list of ids is substituted for the double-underscore placeholder in
+//                                 validScanRequest() (Terraform: var.cloud_scans_per_day; 0 = switched off).
 // Who may read and write: a verified Google account whose address is on the allowlist. Everything else is denied.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -44,6 +49,19 @@ service cloud.firestore {
         && (!('device' in d) || (d.device is string && d.device.size() <= 40));
     }
 
+    // Vietnam day number (UTC+7, no daylight saving): the same as scanDay() in packages/pipeline/src/cloud/scanJob.ts.
+    function today() {
+      return string(int(math.floor((request.time.toMillis() + 25200000) / 86400000)));
+    }
+
+    function validScanRequest(d, id) {
+      return id in [__SCAN_IDS__]
+        && d.keys().hasAll(['at'])
+        && d.keys().hasOnly(['at', 'device'])
+        && d.at is int && d.at > 0
+        && (!('device' in d) || (d.device is string && d.device.size() <= 40));
+    }
+
     match /owners/{o}/snapshot/{doc} {
       allow get: if allowed() && doc == 'latest';
     }
@@ -54,6 +72,11 @@ service cloud.firestore {
 
     match /owners/{o}/settingsInbox/{id} {
       allow create: if allowed() && validSettings(request.resource.data, id);
+    }
+
+    match /owners/{o}/runRequests/{id} {
+      allow get, list: if allowed();
+      allow create: if allowed() && validScanRequest(request.resource.data, id);
     }
   }
 }

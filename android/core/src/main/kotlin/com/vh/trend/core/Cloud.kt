@@ -1,7 +1,9 @@
 package com.vh.trend.core
 
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -126,6 +128,43 @@ class CloudClient(
         }
     }
 
+    /** Recent cloud scan requests, newest first. Empty when the rules do not allow reading them (cloud scan not set up). */
+    suspend fun scans(): List<CloudScan> {
+        val r = http.send(HttpRequest("GET", "$docs/runRequests?pageSize=50", mapOf("authorization" to "Bearer ${auth.idToken()}")))
+        if (r.code == 401) throw notAllowed()
+        if (r.code == 403 || r.code == 404) return emptyList()
+        if (!r.ok) throw CloudError("Cloud trả lỗi ${r.code}.")
+        val list = TrendJson.parseToJsonElement(r.body.ifBlank { "{}" }).jsonObject["documents"]?.jsonArray ?: return emptyList()
+        return list.mapNotNull { d ->
+            val o = d.jsonObject
+            val name = o["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            val id = name.substringAfterLast('/')
+            val m = Regex("^(\\d+)-(\\d+)$").find(id) ?: return@mapNotNull null
+            val f = o["fields"]?.jsonObject ?: JsonObject(emptyMap())
+            fun str(k: String) = f[k]?.jsonObject?.get("stringValue")?.jsonPrimitive?.content
+            fun num(k: String) = f[k]?.jsonObject?.let { v -> (v["integerValue"] ?: v["doubleValue"])?.jsonPrimitive?.content }
+            CloudScan(id, m.groupValues[1].toLong(), m.groupValues[2].toInt(), num("at")?.toDoubleOrNull()?.toLong(), str("status"), str("message"), num("tokens")?.toDoubleOrNull()?.toLong(), num("costUsd")?.toDoubleOrNull())
+        }.sortedWith(compareByDescending<CloudScan> { it.day }.thenByDescending { it.n })
+    }
+
+    /** Creates the request; the rules refuse (403) beyond today's limit or when the cloud scan is switched off. */
+    suspend fun startScan(id: String, at: Long): ScanStart {
+        val body = buildJsonObject {
+            putJsonObject("fields") {
+                putJsonObject("at") { put("integerValue", at.toString()) }
+                putJsonObject("device") { put("stringValue", device.take(40)) }
+            }
+        }.toString()
+        val r = http.send(HttpRequest("POST", "$docs/runRequests?documentId=$id", mapOf("authorization" to "Bearer ${auth.idToken()}", "content-type" to "application/json"), body))
+        return when {
+            r.ok -> ScanStart.Started
+            r.code == 401 -> throw notAllowed()
+            r.code == 403 -> ScanStart.Refused
+            r.code == 409 -> ScanStart.Taken
+            else -> ScanStart.Retry
+        }
+    }
+
     /** Puts a settings change in the PC's settingsInbox. The PC validates it again before it touches config.json. */
     suspend fun sendSettings(c: SettingsChange): Delivery {
         val body = buildJsonObject {
@@ -147,6 +186,29 @@ class CloudClient(
 }
 
 enum class Delivery { Stored, Rejected, Retry }
+
+/** A "Quét bằng Gemini" request (owners/{uid}/runRequests/{day}-{n}) and what the cloud function wrote onto it. */
+@Serializable
+data class CloudScan(
+    val id: String,
+    val day: Long,
+    val n: Int,
+    val at: Long? = null,
+    /** running, done, failed, refused; null while the function has not picked it up. */
+    val status: String? = null,
+    val message: String? = null,
+    val tokens: Long? = null,
+    val costUsd: Double? = null,
+) {
+    val finished: Boolean get() = status != null && status != "running"
+}
+
+/** Day numbers in Vietnam time (UTC+7, no daylight saving): the same as the Firestore rules and the pipeline. */
+object ScanDay {
+    fun of(ms: Long): Long = Math.floorDiv(ms + 7 * 3_600_000L, 86_400_000L)
+}
+
+enum class ScanStart { Started, Refused, Taken, Retry }
 
 class CloudError(message: String) : Exception(message)
 

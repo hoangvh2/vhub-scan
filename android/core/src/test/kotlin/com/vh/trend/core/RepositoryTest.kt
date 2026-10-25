@@ -30,6 +30,11 @@ class FakeNet {
     var refreshCalls = 0
     /** The rules refuse settings documents (403), as they do for an oversized or malformed one. */
     var rejectSettings = false
+    /** owners/owner/runRequests, as Firestore REST documents; the rules accept ids ending -1..-scanLimit. */
+    val scans = linkedMapOf<String, String>()
+    var scanLimit = 2
+    /** Old rules without runRequests: reading the list is refused. */
+    var scansReadable = true
 
     val http = Http { r ->
         log += "${r.method} ${r.url}"
@@ -42,6 +47,19 @@ class FakeNet {
             r.url.startsWith("https://firestore") -> {
                 if (!cloudUp) throw IOException("offline")
                 if (!allowed) return@Http HttpResponse(403, "{}")
+                if (r.url.contains("/runRequests")) {
+                    if (r.method == "GET") {
+                        if (!scansReadable) return@Http HttpResponse(403, "{}")
+                        val docs = scans.entries.joinToString(",") { (id, fields) -> """{"name":"projects/p/databases/(default)/documents/owners/owner/runRequests/$id","fields":$fields}""" }
+                        return@Http HttpResponse(200, """{"documents":[$docs]}""")
+                    }
+                    val id = r.url.substringAfter("documentId=")
+                    val n = id.substringAfter('-').toIntOrNull() ?: 0
+                    if (n !in 1..scanLimit) return@Http HttpResponse(403, "{}")
+                    if (scans.containsKey(id)) return@Http HttpResponse(409, "{}")
+                    scans[id] = kotlinx.serialization.json.Json.parseToJsonElement(r.body!!).jsonObject["fields"].toString()
+                    return@Http HttpResponse(200, "{}")
+                }
                 if (r.method == "GET") cloudSnapshot?.let { HttpResponse(200, """{"fields":{"payload":{"stringValue":${kotlinx.serialization.json.JsonPrimitive(it)}}}}""") } ?: HttpResponse(404, "{}")
                 else {
                     if (rejectSettings && r.url.contains("/settingsInbox?")) return@Http HttpResponse(403, "{}")
@@ -357,4 +375,53 @@ class RepositoryTest {
     }
 
     private suspend fun TrendRepository.changeSettingsBlocking(patch: JsonObject) = changeSettings(patch).second.joinToString { it.problem }
+
+    @Test
+    fun startsTodaysScansUntilTheRulesRefuse() = runTest {
+        val net = FakeNet()
+        val r = signedIn(net)
+        val day = ScanDay.of(clock)
+        val first = r.startScan()
+        assertEquals(ScanOutcome.Started("$day-1", 1), first)
+        val sent = TrendJson.parseToJsonElement(net.scans.getValue("$day-1")).jsonObject
+        assertEquals(clock.toString(), sent["at"]!!.jsonObject["integerValue"]!!.jsonPrimitive.content)
+        assertEquals("test", sent["device"]!!.jsonObject["stringValue"]!!.jsonPrimitive.content)
+        assertEquals(1, r.state().scansToday)
+
+        // Still running: no second scan alongside it.
+        assertEquals(ScanOutcome.Busy, r.startScan())
+        net.scans["$day-1"] = """{"at":{"integerValue":"$clock"},"status":{"stringValue":"done"},"message":{"stringValue":"Xong."},"tokens":{"integerValue":"11000"},"costUsd":{"doubleValue":0.0123}}"""
+        assertEquals(ScanOutcome.Started("$day-2", 2), r.startScan())
+        net.scans["$day-2"] = """{"at":{"integerValue":"$clock"},"status":{"stringValue":"failed"},"message":{"stringValue":"Lỗi: x"}}"""
+        assertEquals(ScanOutcome.Limit(2), r.startScan())
+        assertEquals(2, net.scans.size)
+
+        val s = r.refreshScans()
+        assertEquals(listOf("$day-2", "$day-1"), s.scans.map { it.id })
+        assertEquals(CloudScan("$day-1", day, 1, clock, "done", "Xong.", 11000, 0.0123), s.scans[1])
+        assertEquals(2, s.scansToday)
+    }
+
+    @Test
+    fun yesterdaysScansDoNotCountAndOldRulesDoNotHideTheSnapshot() = runTest {
+        val net = FakeNet()
+        val r = signedIn(net)
+        val day = ScanDay.of(clock)
+        net.scans["${day - 1}-1"] = """{"at":{"integerValue":"1"},"status":{"stringValue":"done"}}"""
+        net.scans["${day - 1}-2"] = """{"at":{"integerValue":"1"},"status":{"stringValue":"done"}}"""
+        assertEquals(ScanOutcome.Started("$day-1", 1), r.startScan())
+
+        net.scansReadable = false
+        val s = r.refresh()
+        assertTrue(s.snapshot != null)
+        assertNull(s.error)
+    }
+
+    @Test
+    fun scanDaysFollowVietnamTime() {
+        // 2026-10-25T16:59:59Z is 23:59:59 in Vietnam; one second later it is the next day there.
+        val before = java.time.Instant.parse("2026-10-25T16:59:59Z").toEpochMilli()
+        assertEquals(ScanDay.of(before) + 1, ScanDay.of(before + 1000))
+        assertEquals(ScanDay.of(java.time.Instant.parse("2026-10-25T00:00:00Z").toEpochMilli()), ScanDay.of(before))
+    }
 }

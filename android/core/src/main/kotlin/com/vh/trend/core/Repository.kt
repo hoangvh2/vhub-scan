@@ -24,7 +24,23 @@ data class SyncState(
     val error: String? = null,
     /** Settings changes sent (or waiting to be sent) that the PC has not applied yet, oldest first. */
     val settingsWaiting: List<SettingsChange> = emptyList(),
-)
+    /** Recent "Quét bằng Gemini" requests, newest first (empty when the cloud scan is not set up). */
+    val scans: List<CloudScan> = emptyList(),
+    /** Today's day number (Vietnam time), to count today's scans. */
+    val today: Long = 0,
+) {
+    val scansToday: Int get() = scans.count { it.day == today }
+}
+
+/** What pressing "Quét bằng Gemini" did. */
+sealed interface ScanOutcome {
+    data class Started(val id: String, val n: Int) : ScanOutcome
+    /** Another scan has not finished yet. */
+    data object Busy : ScanOutcome
+    /** The rules refused: today's limit is used up, or the cloud scan is switched off. */
+    data class Limit(val used: Int) : ScanOutcome
+    data class Failed(val message: String) : ScanOutcome
+}
 
 /** A settings change from this phone: setting key -> new value, as the PC's settings page takes it. */
 @Serializable
@@ -72,12 +88,13 @@ class TrendRepository(
 
     private fun clearAll() {
         auth.clear()
-        listOf(K_CACHE, K_QUEUE, K_OVERLAY, K_SETTINGS).forEach { kv.put(it, null) }
+        listOf(K_CACHE, K_QUEUE, K_OVERLAY, K_SETTINGS, K_SCANS).forEach { kv.put(it, null) }
     }
 
     fun state(error: String? = null): SyncState {
         val c = cached()
         val waiting = settingsQueue(c?.snapshot)
+        val scans = kv.get(K_SCANS)?.let { runCatching { TrendJson.decodeFromString(ListSerializer(CloudScan.serializer()), it) }.getOrNull() } ?: emptyList()
         return SyncState(
             configured = settings.configured,
             signedIn = auth.signedIn,
@@ -88,7 +105,52 @@ class TrendRepository(
             pending = queue().size,
             error = error,
             settingsWaiting = waiting,
+            scans = scans,
+            today = ScanDay.of(now()),
         )
+    }
+
+    private fun saveScans(l: List<CloudScan>) = kv.put(K_SCANS, TrendJson.encodeToString(ListSerializer(CloudScan.serializer()), l))
+
+    /** Reads the cloud scan requests again (to follow a running scan). */
+    suspend fun refreshScans(): SyncState = lock.withLock {
+        if (!settings.configured || !auth.signedIn) return@withLock state()
+        try {
+            saveScans(cloud.scans())
+            state()
+        } catch (e: AuthLost) {
+            state(e.message)
+        } catch (e: Exception) {
+            state()
+        }
+    }
+
+    /**
+     * Starts a Gemini scan on the cloud: creates today's next request, {day}-{n}. The Firestore rules accept only the
+     * first few of the day, so the limit holds whatever the app does; a refusal is reported as [ScanOutcome.Limit].
+     */
+    suspend fun startScan(): ScanOutcome = lock.withLock {
+        if (!settings.configured || !auth.signedIn) return@withLock ScanOutcome.Failed("Chưa đăng nhập.")
+        try {
+            val list = cloud.scans()
+            saveScans(list)
+            val t = now()
+            if (list.any { !it.finished && t - (it.at ?: 0) < 12 * 60_000 }) return@withLock ScanOutcome.Busy
+            val day = ScanDay.of(t)
+            val today = list.filter { it.day == day }
+            val n = (today.maxOfOrNull { it.n } ?: 0) + 1
+            val id = "$day-$n"
+            when (cloud.startScan(id, t)) {
+                ScanStart.Started -> { saveScans(listOf(CloudScan(id, day, n, t)) + list); ScanOutcome.Started(id, n) }
+                ScanStart.Refused -> ScanOutcome.Limit(today.size)
+                ScanStart.Taken -> ScanOutcome.Failed("Lượt này vừa được dùng ở thiết bị khác. Thử lại.")
+                ScanStart.Retry -> ScanOutcome.Failed("Cloud đang bận. Thử lại sau.")
+            }
+        } catch (e: AuthLost) {
+            ScanOutcome.Failed(e.message ?: "Phiên đăng nhập đã hết hạn.")
+        } catch (e: Exception) {
+            ScanOutcome.Failed("Không kết nối được cloud: ${e.message ?: e::class.simpleName}")
+        }
     }
 
     /** Sends queued actions and fetches the newest snapshot the PC published. */
@@ -99,6 +161,8 @@ class TrendRepository(
             val rejected = flushSettings()
             val snap = cloud.snapshot()
             if (snap != null) store(Cached(Source.Cloud, now(), snap))
+            // Best effort: the list of cloud scans is extra; failing to read it must not hide the snapshot.
+            runCatching { cloud.scans() }.onSuccess { saveScans(it) }.onFailure { if (it is AuthLost) throw it }
             state(
                 when {
                     rejected -> "Cloud từ chối một thay đổi cài đặt (quá lớn hoặc sai định dạng), nên đã bỏ nó. Sửa lại rồi gửi lần nữa."
@@ -214,5 +278,6 @@ class TrendRepository(
         const val K_QUEUE = "queue"
         const val K_OVERLAY = "overlay"
         const val K_SETTINGS = "settings.queue"
+        const val K_SCANS = "scans"
     }
 }

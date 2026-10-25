@@ -6,7 +6,8 @@ import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 
 const PROJECT = "demo-vhub-trend";
 // The same template production uses, with a test allowlist (Terraform substitutes var.allowed_emails the same way).
-const RULES = renderRules(readFileSync(new URL("../../firebase/firestore.rules.tmpl", import.meta.url), "utf8"), parseEmails("Me@Example.com, wife@example.org"));
+const TEMPLATE = readFileSync(new URL("../../firebase/firestore.rules.tmpl", import.meta.url), "utf8");
+const RULES = renderRules(TEMPLATE, parseEmails("Me@Example.com, wife@example.org"));
 const google = (email: string, extra: Record<string, unknown> = {}) => ({ email, email_verified: true, firebase: { sign_in_provider: "google.com" }, ...extra });
 let env: RulesTestEnvironment;
 
@@ -115,5 +116,55 @@ describe("settings inbox", () => {
     await assertFails(getDocs(collection(phone(), "owners/owner/settingsInbox")));
     await assertFails(updateDoc(doc(phone(), "owners/owner/settingsInbox/set_existing_1"), { patch: "{}" }));
     await assertFails(deleteDoc(doc(phone(), "owners/owner/settingsInbox/set_existing_1")));
+  });
+});
+
+describe("cloud scan requests", () => {
+  // Same formula as the rules and scanDay() in the pipeline (Vietnam time).
+  const today = () => Math.floor((Date.now() + 7 * 3_600_000) / 86_400_000);
+  const req = { at: 1792800000000, device: "Pixel 8" };
+  it("an allowlisted account can start today's first and second scan, and read the outcome", async () => {
+    const d = today();
+    await assertSucceeds(setDoc(doc(phone(), `owners/owner/runRequests/${d}-1`), req));
+    await assertSucceeds(setDoc(doc(phone(), `owners/owner/runRequests/${d}-2`), { at: 5 }));
+    await assertSucceeds(getDoc(doc(phone(), `owners/owner/runRequests/${d}-1`)));
+    await assertSucceeds(getDocs(collection(phone(), "owners/owner/runRequests")));
+  });
+  it("refuses a third scan today, scans for another day, and any other id", async () => {
+    const d = today();
+    for (const id of [`${d}-3`, `${d}-0`, `${d - 1}-1`, `${d + 1}-1`, "scan-now-123", `${d}-1x`]) {
+      await assertFails(setDoc(doc(phone(), `owners/owner/runRequests/${id}`), req));
+    }
+  });
+  it("refuses a bad shape, a repeat of the same request, and changes to a request", async () => {
+    const id = `owners/owner/runRequests/${today()}-1`;
+    for (const d of [{ ...req, status: "done" }, { device: "x" }, { at: "now" }, { ...req, device: "x".repeat(41) }]) await assertFails(setDoc(doc(phone(), id), d));
+    await assertSucceeds(setDoc(doc(phone(), id), req));
+    await assertFails(setDoc(doc(phone(), id), req)); // exists: that would be an update
+    await assertFails(updateDoc(doc(phone(), id), { status: "done" }));
+    await assertFails(deleteDoc(doc(phone(), id)));
+  });
+  it("nobody else can start or read scans", async () => {
+    const id = `owners/owner/runRequests/${today()}-1`;
+    await assertFails(setDoc(doc(env.authenticatedContext("u-x", google("mallory@example.com")).firestore(), id), req));
+    await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), id), req));
+    await assertFails(getDocs(collection(env.authenticatedContext("u-x", google("mallory@example.com")).firestore(), "owners/owner/runRequests")));
+  });
+});
+
+describe("cloud scan switched off (cloud_scans_per_day = 0)", () => {
+  beforeAll(async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({ projectId: PROJECT, firestore: { rules: renderRules(TEMPLATE, parseEmails("Me@Example.com, wife@example.org"), 0), host: "127.0.0.1", port: 8080 } });
+  });
+  // The emulator keeps the last rules loaded for the project: put the usual ones back for the test files that follow.
+  afterAll(async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({ projectId: PROJECT, firestore: { rules: RULES, host: "127.0.0.1", port: 8080 } });
+  });
+  it("refuses every scan request, and the rest keeps working", async () => {
+    const d = Math.floor((Date.now() + 7 * 3_600_000) / 86_400_000);
+    await assertFails(setDoc(doc(phone(), `owners/owner/runRequests/${d}-1`), { at: 1 }));
+    await assertSucceeds(getDoc(doc(phone(), "owners/owner/snapshot/latest")));
   });
 });

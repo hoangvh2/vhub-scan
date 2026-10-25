@@ -389,12 +389,13 @@ async function card(d: Deps, st: RunStats, now: Date): Promise<void> {
       for (const e of batch) {
         const c = byId.get(e.id);
         if (!c || typeof c.what !== "string") continue;
+        // Clipped to the schema's limits: not every model enforces maxLength (Gemini ignores it).
         const card = {
-          what: c.what,
-          learn: c.learn,
-          apply: (c.apply ?? []).slice(0, 2),
+          what: c.what.slice(0, 220),
+          learn: String(c.learn ?? "").slice(0, 220),
+          apply: (Array.isArray(c.apply) ? c.apply : []).slice(0, 2).map((a) => ({ project: String(a?.project ?? "").slice(0, 80), how: String(a?.how ?? "").slice(0, 200) })),
           effort: ["S", "M", "L"].includes(c.effort) ? c.effort : "M",
-          risk: c.risk ?? "",
+          risk: String(c.risk ?? "").slice(0, 160),
         };
         d.db.run("UPDATE entity SET stage = 'carded', card_json = ?, card_hash = content_hash WHERE id = ?", JSON.stringify(card), e.id);
         st.carded++;

@@ -1,9 +1,10 @@
 terraform {
-  required_version = ">= 1.10"
+  required_version = ">= 1.11" # write-only arguments (scan.tf)
 
   required_providers {
     google      = { source = "hashicorp/google", version = "~> 8.6" }
     google-beta = { source = "hashicorp/google-beta", version = "~> 8.6" }
+    archive     = { source = "hashicorp/archive", version = "~> 2.7" }
   }
 }
 

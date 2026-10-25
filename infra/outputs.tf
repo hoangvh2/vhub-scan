@@ -22,6 +22,15 @@ output "pc_key_json" {
   sensitive   = true
 }
 
+output "data_bucket" {
+  description = "Bucket the PC and the cloud scan share the database through (null while cloud_scan is off). Read by `npm run cloud:connect`."
+  value       = local.scan ? google_storage_bucket.data[0].name : null
+}
+
+output "cloud_scan" {
+  value = local.scan ? "Bật: ${local.scans_today} lần/ngày, model ${var.gemini_model}" : "Tắt (cloud_scan = false)"
+}
+
 output "web_client_id" {
   description = "Google sign-in Client ID (var.web_client_id), used by the dashboard build and the APK build."
   value       = var.web_client_id

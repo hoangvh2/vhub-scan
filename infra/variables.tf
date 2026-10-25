@@ -63,3 +63,64 @@ variable "web_client_id" {
     error_message = "web_client_id looks like 1234567890-abc123.apps.googleusercontent.com."
   }
 }
+
+# ---------------------------------------------------------------- cloud scan with Gemini (scan.tf, optional)
+variable "cloud_scan" {
+  description = "Turn on the \"Quét bằng Gemini\" button on the web and the phone. Needs the Blaze plan on this project and a Gemini API key (gemini_api_key). Run `npm run cloud:function` before `terraform apply`, and `npm run cloud:connect` after it."
+  type        = bool
+  default     = false
+}
+
+variable "gemini_api_key" {
+  description = "Gemini API key from Google AI Studio (project with billing, prepaid). Stored in Secret Manager through a write-only argument: never in terraform.tfstate or a plan. Needed on the apply that creates or rotates it (bump gemini_api_key_version to rotate)."
+  type        = string
+  default     = ""
+  sensitive   = true
+  ephemeral   = true
+}
+
+variable "gemini_api_key_version" {
+  description = "Increase by 1 to store a new gemini_api_key (Terraform cannot see the write-only value, so it uses this number to know it changed)."
+  type        = number
+  default     = 1
+}
+
+variable "gemini_model" {
+  description = "Model the cloud scan uses for both AI steps. gemini-3.5-flash-lite: cheapest stable model without a shutdown date (2026-10-25)."
+  type        = string
+  default     = "gemini-3.5-flash-lite"
+  validation {
+    condition     = can(regex("^gemini-[a-z0-9.-]{1,60}$", var.gemini_model))
+    error_message = "gemini_model is a Gemini model id, e.g. gemini-3.5-flash-lite."
+  }
+}
+
+variable "cloud_scans_per_day" {
+  description = "How many cloud scans may be started per day (Vietnam time). Enforced by the Firestore rules, so it holds even if the app is bypassed. 0 = button switched off (kill switch), keeping everything else."
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.cloud_scans_per_day >= 0 && var.cloud_scans_per_day <= 5 && floor(var.cloud_scans_per_day) == var.cloud_scans_per_day
+    error_message = "cloud_scans_per_day is a whole number from 0 to 5."
+  }
+}
+
+variable "cloud_github_token" {
+  description = "Also give the cloud scan a GitHub token (github_token), for GitHub's higher rate limit. Without one, searches from Google's shared addresses can hit GitHub's anonymous limit."
+  type        = bool
+  default     = false
+}
+
+variable "github_token" {
+  description = "GitHub fine-grained token with public read access only (no repositories, no permissions). Write-only, like gemini_api_key."
+  type        = string
+  default     = ""
+  sensitive   = true
+  ephemeral   = true
+}
+
+variable "github_token_version" {
+  description = "Increase by 1 to store a new github_token."
+  type        = number
+  default     = 1
+}

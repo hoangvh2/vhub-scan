@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
             override fun editSetting(key: String, value: JsonElement, reset: Boolean) = vm.editSetting(key, value, reset)
             override fun discardSettings() = vm.discardSettings()
             override fun saveSettings() = vm.saveSettings()
+            override fun startScan() = vm.startScan()
             override fun signOut() {
                 vm.signOut()
                 lifecycleScope.launch { GoogleSignIn.forget(this@MainActivity) }

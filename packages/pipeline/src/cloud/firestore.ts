@@ -44,8 +44,22 @@ export interface DocStore {
   remove(names: string[]): Promise<void>;
 }
 
-/** Minimal Firestore REST client (no SDK): set a document, list a collection, delete in batches. */
-export class FirestoreRest implements DocStore {
+/** What the cloud scan also needs: read one document, change some of its fields. */
+export interface DocReader extends DocStore {
+  /** Null when the document does not exist. */
+  get(path: string): Promise<FsDoc | null>;
+  /** Sets only these fields of an existing document. */
+  update(path: string, fields: Record<string, Primitive>): Promise<void>;
+}
+
+const toDoc = (d: { name: string; fields?: Record<string, Record<string, unknown>> }): FsDoc => ({
+  name: d.name,
+  id: d.name.slice(d.name.lastIndexOf("/") + 1),
+  fields: Object.fromEntries(Object.entries(d.fields ?? {}).map(([k, v]) => [k, decode(v)])),
+});
+
+/** Minimal Firestore REST client (no SDK): get, set or update a document, list a collection, delete in batches. */
+export class FirestoreRest implements DocReader {
   private readonly base: string;
   readonly root: string;
 
@@ -56,7 +70,7 @@ export class FirestoreRest implements DocStore {
     this.root = `projects/${o.projectId}/databases/(default)/documents`;
   }
 
-  private async call(method: string, url: string, body?: unknown): Promise<unknown> {
+  private async call(method: string, url: string, body?: unknown, allow404 = false): Promise<unknown> {
     const f = this.o.fetchImpl ?? fetch;
     const r = await f(url, {
       method,
@@ -65,6 +79,7 @@ export class FirestoreRest implements DocStore {
       signal: AbortSignal.timeout(this.o.timeoutMs ?? 20_000),
     });
     const text = await r.text();
+    if (allow404 && r.status === 404) return null;
     if (!r.ok) {
       let msg = text.slice(0, 200);
       try {
@@ -82,6 +97,18 @@ export class FirestoreRest implements DocStore {
     await this.call("PATCH", `${this.base}/v1/${this.root}/${path}`, { fields: enc });
   }
 
+  async get(path: string): Promise<FsDoc | null> {
+    const r = (await this.call("GET", `${this.base}/v1/${this.root}/${path}`, undefined, true)) as { name: string; fields?: Record<string, Record<string, unknown>> } | null;
+    return r ? toDoc(r) : null;
+  }
+
+  async update(path: string, fields: Record<string, Primitive>): Promise<void> {
+    const q = new URLSearchParams({ "currentDocument.exists": "true" });
+    for (const k of Object.keys(fields)) q.append("updateMask.fieldPaths", k);
+    const enc = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, encode(v)]));
+    await this.call("PATCH", `${this.base}/v1/${this.root}/${path}?${q}`, { fields: enc });
+  }
+
   async list(collectionPath: string): Promise<FsDoc[]> {
     const out: FsDoc[] = [];
     let page = "";
@@ -92,13 +119,7 @@ export class FirestoreRest implements DocStore {
         documents?: { name: string; fields?: Record<string, Record<string, unknown>> }[];
         nextPageToken?: string;
       };
-      for (const d of r.documents ?? []) {
-        out.push({
-          name: d.name,
-          id: d.name.slice(d.name.lastIndexOf("/") + 1),
-          fields: Object.fromEntries(Object.entries(d.fields ?? {}).map(([k, v]) => [k, decode(v)])),
-        });
-      }
+      for (const d of r.documents ?? []) out.push(toDoc(d));
       if (!r.nextPageToken) break;
       page = r.nextPageToken;
     }

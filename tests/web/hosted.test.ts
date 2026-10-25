@@ -15,6 +15,11 @@ import type { CloudConfig } from "../../packages/pipeline/src/cloud/config.js";
 import { FirestoreRest } from "../../packages/pipeline/src/cloud/firestore.js";
 import { ServiceAccountAuth } from "../../packages/pipeline/src/cloud/google.js";
 import { syncOnce } from "../../packages/pipeline/src/cloud/sync.js";
+import { runCloudScan, scanDay } from "../../packages/pipeline/src/cloud/scanJob.js";
+import { githubSettings } from "../../packages/pipeline/src/config.js";
+import { FakeLlm } from "../../packages/pipeline/src/llm/fake.js";
+import { GitHubSource } from "../../packages/pipeline/src/sources/github.js";
+import { MemoryBlobs } from "../../packages/pipeline/test/memory.js";
 import { SettingsStore } from "../../packages/pipeline/src/settingsStore.js";
 import { runPipeline } from "../../packages/pipeline/src/pipeline.js";
 import { rig } from "../../packages/pipeline/test/helpers.js";
@@ -192,4 +197,57 @@ describe("hosted dashboard", () => {
     await ctx.close();
     expect(problems.filter((p) => !/Failed to load resource/.test(p))).toEqual([]);
   });
+
+  it("starts a Gemini scan on the cloud from the web, follows it to the end, and stops at the daily limit", async () => {
+    await fetch(`${FS}/emulator/v1/projects/${PROJECT}/databases/(default)/documents`, { method: "DELETE" });
+    const r = rig({ cfg: cfg(), ...world() });
+    await runPipeline(r.deps);
+    const auth = new ServiceAccountAuth(cloud);
+    const docs = new FirestoreRest({ projectId: PROJECT, token: () => auth.token(), baseUrl: FS });
+    const blobs = new MemoryBlobs();
+    // The PC shares its database on its sync, as with cloud_scan on.
+    expect(await syncOnce({ db: r.db, store: r.store, budget: r.deps.budget, docs, uid: "owner", clock: r.clock, handOver: { blobs, config: () => null } })).toMatchObject({ ok: true, db: { pushed: true } });
+    const shots = process.env.HOSTED_SHOTS;
+
+    const { ctx, page } = await open({ viewport: { width: 1440, height: 900 } });
+    await page.goto(base);
+    await page.waitForSelector("#fake-google");
+    await signInAs(page, "me@example.com");
+    await page.waitForSelector(".rowi");
+    expect(await page.locator("#runnow").innerText()).toContain("Quét bằng Gemini");
+    await page.keyboard.press("4");
+    await page.waitForSelector("#scan-cloud");
+    expect(await page.locator("#cloudscan").innerText()).toContain("Chưa quét trên cloud lần nào");
+    await page.click("#scan-cloud");
+    await page.waitForFunction(() => document.querySelector("#toast")?.textContent?.includes("Đã bắt đầu quét bằng Gemini"));
+    const day = scanDay(Date.now());
+    const reqs = await docs.list("owners/owner/runRequests");
+    expect(reqs.map((x) => x.id)).toEqual([`${day}-1`]);
+    expect(reqs[0]!.fields).toMatchObject({ device: "web" });
+
+    // What the Cloud Function does on the "document created" event, here against the Firestore emulator.
+    const w = world();
+    const done = await runCloudScan({
+      docs, blobs, uid: "owner", requestId: `${day}-1`, clock: { now: () => new Date() }, perDay: 2, model: "gemini-3.5-flash-lite",
+      adapter: () => new FakeLlm(),
+      sources: (c) => ({ github: new GitHubSource({ cfg: githubSettings(c), fetchImpl: w.fetchImpl, sleep: async () => undefined }) }),
+      workDir: mkdtempSync(join(tmpdir(), "vhub-scan-")),
+    });
+    expect(done.status).toBe("done");
+    // The page notices the outcome on its own and says so.
+    await page.waitForFunction(() => document.querySelector("#toast")?.textContent?.startsWith("Xong"), undefined, { timeout: 20_000 });
+    await page.keyboard.press("4");
+    await page.waitForFunction(() => document.querySelector("#cloudscan")?.textContent?.includes("Xong ·"));
+    if (shots) await page.screenshot({ path: join(shots, "hosted-cloud-scan.png") });
+
+    // Second scan of the day is allowed; the third is refused by the Firestore rules, whatever the page does.
+    await page.click("#scan-cloud");
+    await page.waitForFunction(() => document.querySelector("#toast")?.textContent?.includes("lượt 2"));
+    await docs.update(`owners/owner/runRequests/${day}-2`, { status: "done", message: "Xong." });
+    await page.click("#scan-cloud");
+    await page.waitForFunction(() => document.querySelector("#toast")?.textContent?.includes("Hết lượt quét hôm nay"));
+    expect((await docs.list("owners/owner/runRequests")).map((x) => x.id).sort()).toEqual([`${day}-1`, `${day}-2`]);
+    await ctx.close();
+    expect(problems.filter((p) => !/Failed to load resource/.test(p))).toEqual([]);
+  }, 90_000);
 });

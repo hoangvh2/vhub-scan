@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vh.trend.core.Action
 import com.vh.trend.core.Item
+import com.vh.trend.core.ScanOutcome
 import com.vh.trend.core.SettingError
 import com.vh.trend.core.SettingRules
 import com.vh.trend.core.Topic
@@ -11,6 +12,7 @@ import com.vh.trend.core.TrendJson
 import com.vh.trend.core.SyncState
 import com.vh.trend.core.TrendRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -41,6 +43,8 @@ data class UiState(
     val draftGen: Int = 0,
     /** What the last send was refused for, per setting key. */
     val settingsErrors: List<SettingError> = emptyList(),
+    /** A "Quét bằng Gemini" press is being sent. */
+    val scanning: Boolean = false,
 ) {
     val snapshot get() = sync.snapshot
 
@@ -124,6 +128,42 @@ class AppViewModel(private val repo: TrendRepository) : ViewModel() {
         val topics = runCatching { TrendJson.decodeFromJsonElement(ser, v) }.getOrNull() ?: return v
         return TrendJson.encodeToJsonElement(ser, SettingRules.withTopicIds(topics))
     }
+    private var followJob: Job? = null
+
+    /** Starts a Gemini scan on the cloud, then follows it until the cloud function reports the outcome. */
+    fun startScan() {
+        if (_state.value.scanning) return
+        _state.update { it.copy(scanning = true) }
+        viewModelScope.launch {
+            val r = repo.startScan()
+            val text = when (r) {
+                is ScanOutcome.Started -> "Đã bắt đầu quét bằng Gemini (lượt ${r.n} hôm nay). Thường mất 1–3 phút."
+                ScanOutcome.Busy -> "Đang có một lần quét trên cloud. Đợi nó xong (vài phút)."
+                is ScanOutcome.Limit -> "Hết lượt quét hôm nay (đã dùng ${r.used}), hoặc quét trên cloud đang tắt. Lượt mới từ 0 giờ."
+                is ScanOutcome.Failed -> r.message
+            }
+            _state.update { it.copy(sync = repo.state(), scanning = false, notice = Notice(++noticeId, text)) }
+            if (r is ScanOutcome.Started) follow(r.id)
+        }
+    }
+
+    private fun follow(id: String) {
+        followJob?.cancel()
+        followJob = viewModelScope.launch {
+            repeat(90) {
+                delay(8_000)
+                val s = repo.refreshScans()
+                _state.update { it.copy(sync = s) }
+                val x = s.scans.firstOrNull { it.id == id }
+                if (x != null && x.finished) {
+                    _state.update { it.copy(notice = Notice(++noticeId, x.message ?: "Quét xong.")) }
+                    refresh()
+                    return@launch
+                }
+            }
+        }
+    }
+
     fun select(id: String?) = _state.update { it.copy(selectedId = id) }
     fun query(q: String) = _state.update { it.copy(query = q) }
     fun dismissNotice() = _state.update { it.copy(notice = null) }
