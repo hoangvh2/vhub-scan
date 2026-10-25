@@ -21,6 +21,12 @@ export function pairPayload(o: { lan: string[]; token: string; cloud: CloudConfi
   return p;
 }
 
+/** Link that signs a browser in to the hosted dashboard. The token rides in the #fragment, which browsers never send to a server. */
+export function webLink(cloud: CloudConfig, now: Date): string {
+  const body = JSON.stringify({ v: 1, fb: { p: cloud.projectId, k: cloud.apiKey, u: cloud.uid, ct: customToken(cloud, now) } });
+  return `${cloud.webUrl ?? `https://${cloud.projectId}.web.app`}/#pair=${Buffer.from(body).toString("base64url")}`;
+}
+
 export const pairCode = (p: PairPayload): string => JSON.stringify(p);
 
 /** IPv4 addresses of this PC that a phone on the same Wi-Fi can reach. */

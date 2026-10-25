@@ -17,3 +17,5 @@ data/
 *.tfvars
 !*.tfvars.example
 crash.log
+# built by npm run web:build
+firebase/public/

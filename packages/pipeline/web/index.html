@@ -2,6 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
+<!--VH_MODE-->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f4f3ef" media="(prefers-color-scheme: light)">
@@ -233,6 +234,7 @@ a.btn{text-decoration:none}
   body.sheet #toast{bottom:calc(72px + env(safe-area-inset-bottom))}
 }
 @media (prefers-reduced-motion:reduce){.detail{transition:none}}
+.hosted #runnow, .hosted #runnow2 { display: none; }
 </style>
 </head>
 <body>
@@ -296,17 +298,135 @@ const EFFORT = { S: ["Nhỏ", 1], M: ["Vừa", 2], L: ["Lớn", 3] };
 const ui = { tab: "today", items: [], sel: 0, health: null, detail: null, loading: true, error: null };
 const phone = matchMedia("(max-width: 820px)");
 
+// Two ways to run this page. On the PC (`npm run dashboard`) it talks to the local server with a token. Hosted on
+// Firebase Hosting (scripts/build-hosting.mjs sets VH_CLOUD) it reads the snapshot the PC published to Firestore.
+const CLOUD = window.VH_CLOUD === true;
+if (CLOUD) document.documentElement.classList.add("hosted");
+
 // The token arrives once in the URL (printed by `trend serve`), is kept in this browser, and removed from the address bar.
 const url = new URL(location.href);
-if (url.searchParams.get("t")) { try { localStorage.setItem("trendToken", url.searchParams.get("t")); } catch {} url.searchParams.delete("t"); history.replaceState(null, "", url.pathname); }
+if (!CLOUD && url.searchParams.get("t")) { try { localStorage.setItem("trendToken", url.searchParams.get("t")); } catch {} url.searchParams.delete("t"); history.replaceState(null, "", url.pathname); }
 const token = (() => { try { return localStorage.getItem("trendToken") || ""; } catch { return ""; } })();
 
 class AuthError extends Error {}
 async function api(path, opt = {}) {
+  if (CLOUD) return cloudApi(path, opt);
   const r = await fetch(path, { ...opt, headers: { authorization: "Bearer " + token, "content-type": "application/json" } });
   if (r.status === 401) throw new AuthError("Trình duyệt này chưa có mã truy cập.");
   if (!r.ok && r.status !== 202 && r.status !== 409) throw new Error("Máy chủ trả lỗi " + r.status);
   return r.json();
+}
+
+/* ---------- hosted mode: Firebase Auth + Firestore over REST (same contract as the phone app, docs/SYNC.md) ---------- */
+const EP = Object.assign({ auth: "https://identitytoolkit.googleapis.com", token: "https://securetoken.googleapis.com", fs: "https://firestore.googleapis.com" }, window.VH_ENDPOINTS || {});
+const ACTION_STATE = { keep: "kept", skip: "skipped", snooze: "snoozed", trying: "trying", done: "done", reset: "new" };
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const cloud = {
+  session: store.get("vhSession"), snap: null, snapAt: 0, ready: null,
+  /** The pairing link carries a one-hour custom token in the #fragment (never sent to a server). Exchange it once. */
+  pair() {
+    const m = /^#pair=([A-Za-z0-9_-]+)$/.exec(location.hash);
+    if (!m) return Promise.resolve();
+    history.replaceState(null, "", location.pathname + location.search);
+    return (async () => {
+      let fb;
+      try { fb = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(m[1].replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)))).fb; } catch {}
+      if (!fb || !fb.p || !fb.k || !fb.u || !fb.ct) throw new AuthError("Liên kết ghép nối bị hỏng. Tạo lại trên PC: npm run pair");
+      const r = await fetch(`${EP.auth}/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(fb.k)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: fb.ct, returnSecureToken: true }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new AuthError("Liên kết đã hết hạn hoặc không dùng được (" + ((j.error && j.error.message) || r.status) + "). Tạo lại trên PC: npm run pair");
+      this.session = { p: fb.p, k: fb.k, u: fb.u, refresh: j.refreshToken, id: j.idToken, until: Date.now() + (Number(j.expiresIn) || 3600) * 1000 - 60000 };
+      store.set("vhSession", this.session);
+    })();
+  },
+  async idToken() {
+    const s = this.session;
+    if (!s) throw new AuthError("Trình duyệt này chưa ghép nối với PC.");
+    if (s.id && Date.now() < s.until) return s.id;
+    const r = await fetch(`${EP.token}/v1/token?key=${encodeURIComponent(s.k)}`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "grant_type=refresh_token&refresh_token=" + encodeURIComponent(s.refresh) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { this.session = null; store.set("vhSession", null); throw new AuthError("Phiên đăng nhập đã hết hạn. Tạo lại liên kết trên PC: npm run pair"); }
+    this.session = { ...s, refresh: j.refresh_token || s.refresh, id: j.id_token, until: Date.now() + (Number(j.expires_in) || 3600) * 1000 - 60000 };
+    store.set("vhSession", this.session);
+    return this.session.id;
+  },
+  docs() { return `${EP.fs}/v1/projects/${this.session.p}/databases/(default)/documents/owners/${this.session.u}`; },
+  async fetchSnapshot() {
+    const idt = await this.idToken();
+    const r = await fetch(this.docs() + "/snapshot/latest", { headers: { authorization: "Bearer " + idt } });
+    if (r.status === 404) throw new Error("PC chưa đẩy dữ liệu lên cloud. Trên PC chạy: npm run sync");
+    if (r.status === 401 || r.status === 403) throw new AuthError("Cloud từ chối trình duyệt này. Tạo lại liên kết trên PC: npm run pair");
+    if (!r.ok) throw new Error("Cloud trả lỗi " + r.status);
+    const j = await r.json();
+    const payload = j.fields && j.fields.payload && j.fields.payload.stringValue;
+    if (!payload) throw new Error("Snapshot trên cloud không đọc được.");
+    return JSON.parse(payload);
+  },
+  /** Re-reads at most every 30 s; actions patch the view locally (overlay) until the PC has applied them. */
+  async snapshot(force) {
+    if (!this.ready) this.ready = this.pair();
+    await this.ready;
+    if (force || !this.snap || Date.now() - this.snapAt > 30000) { this.snap = await this.fetchSnapshot(); this.snapAt = Date.now(); }
+    return this.snap;
+  },
+  overlay() {
+    const gen = this.snap ? Date.parse(this.snap.generatedAt) || 0 : 0;
+    const all = store.get("vhOverlay") || [];
+    const live = all.filter((o) => o.at > gen);
+    if (live.length !== all.length) store.set("vhOverlay", live);
+    return new Map(live.map((o) => [o.id, o]));
+  },
+  /** The snapshot with the user's not-yet-synced actions applied. */
+  view() {
+    const s = this.snap, ov = this.overlay();
+    const patch = (it) => (ov.has(it.id) ? { ...it, userState: ov.get(it.id).state } : it);
+    const digest = s.digest.map(patch);
+    const known = new Map([...s.digest, ...s.kept, ...s.explore].map((it) => [it.id, patch(it)]));
+    const kept = [...known.values()].filter((it) => it.userState === "kept" || it.userState === "trying").sort((x, y) => (y.userState === "trying") - (x.userState === "trying"));
+    const explore = [...known.values()].filter((it) => it.userState === "new").sort((x, y) => (y.triage.score ?? -1) - (x.triage.score ?? -1) || (y.stars ?? y.points ?? 0) - (x.stars ?? x.points ?? 0));
+    return { s, digest, kept, explore, known };
+  },
+  async send(id, action, days) {
+    const idt = await this.idToken();
+    const eventId = crypto.randomUUID();
+    const at = Date.now();
+    const fields = { entityId: { stringValue: id }, action: { stringValue: action }, at: { integerValue: String(at) }, device: { stringValue: "web" } };
+    if (action === "snooze") fields.days = { integerValue: String(days || 7) };
+    const r = await fetch(`${this.docs()}/inbox?documentId=${eventId}`, { method: "POST", headers: { authorization: "Bearer " + idt, "content-type": "application/json" }, body: JSON.stringify({ fields }) });
+    if (!r.ok && r.status !== 409) throw new Error("Cloud trả lỗi " + r.status);
+    store.set("vhOverlay", [...(store.get("vhOverlay") || []).filter((o) => o.id !== id), { id, state: ACTION_STATE[action] || "new", at }]);
+    return { ok: true };
+  },
+};
+async function cloudApi(path, opt) {
+  const u = new URL(path, "http://x");
+  if (opt.method === "POST") {
+    if (u.pathname === "/api/feedback") { const b = JSON.parse(opt.body); await cloud.snapshot(); return cloud.send(b.id, b.action, b.days); }
+    return { started: false, reason: "chạy quét trên PC" };
+  }
+  await cloud.snapshot();
+  const v = cloud.view(), q = (u.searchParams.get("q") || "").trim().toLowerCase();
+  if (u.pathname === "/api/health") {
+    const h = v.s.health, lr = h.lastRun;
+    return { lastRun: lr && { started_at: lr.startedAt, finished_at: lr.finishedAt, status: lr.status, error: lr.error, stats: lr }, tokens: { inTokens: h.tokens.used, outTokens: 0, limit: h.tokens.limit, calls: h.tokens.calls, costUsd: h.tokens.costUsd }, userStates: h.counts, digestCount: v.digest.length, cloud: { projectId: cloud.session.p, syncMinutes: null, last: { at: v.s.generatedAt, ok: true, applied: 0 } } };
+  }
+  if (u.pathname === "/api/digest") return { day: v.s.day, items: v.digest };
+  if (u.pathname === "/api/entities") {
+    const st = u.searchParams.get("state"), lim = Number(u.searchParams.get("limit")) || 50;
+    let items = st === "kept" ? v.kept.filter((x) => x.userState === "kept") : st === "trying" ? v.kept.filter((x) => x.userState === "trying") : [...v.known.values()].filter((x) => x.userState !== "skipped" && x.userState !== "done");
+    if (q) items = items.filter((x) => (x.title + " " + (x.description || "") + " " + (x.topics || []).join(" ")).toLowerCase().includes(q));
+    else if (!st) items = v.explore;
+    return { items: items.slice(0, lim) };
+  }
+  if (u.pathname === "/api/entity") {
+    const it = v.known.get(u.searchParams.get("id"));
+    if (!it) throw new Error("Không thấy mục này trong snapshot.");
+    return { ...it, observations: (it.series || []).map((n) => ({ stars: n })), sightings: (it.sources || []).map((src) => ({ source: src, url: "" })) };
+  }
+  throw new Error("Không hỗ trợ " + u.pathname);
 }
 
 function h(tag, props, ...kids) {
@@ -436,9 +556,11 @@ function renderList() {
   $("#searchbox").hidden = ui.tab !== "explore";
   $("#app").classList.toggle("is-system", ui.tab === "system");
   if (ui.error) {
-    v.replaceChildren(ui.error instanceof AuthError
+    v.replaceChildren(ui.error instanceof AuthError && CLOUD
+      ? empty("Chưa ghép nối với PC", ui.error.message + " Lệnh này in ra một liên kết; mở nó trong trình duyệt này.", h("code", {}, "npm run pair"))
+      : ui.error instanceof AuthError
       ? empty("Cần mã truy cập", "Mở lại đúng đường link mà lệnh dashboard in ra trong terminal (có đoạn ?t=...). Trình duyệt sẽ nhớ mã cho lần sau.", h("code", {}, "npm run dashboard"))
-      : empty("Không tải được dữ liệu", "Kiểm tra cửa sổ terminal đang chạy dashboard còn mở không. " + ui.error.message, h("button", { class: "btn", onclick: () => load() }, "Thử lại")));
+      : empty("Không tải được dữ liệu", (CLOUD ? "" : "Kiểm tra cửa sổ terminal đang chạy dashboard còn mở không. ") + ui.error.message, h("button", { class: "btn", onclick: () => load() }, "Thử lại")));
     $("#psub").textContent = ""; return;
   }
   if (ui.loading && !ui.items.length && ui.tab !== "system") { v.replaceChildren(skeleton()); return; }
@@ -559,7 +681,7 @@ async function renderSystem(v) {
       h("dl", { class: "kv num" }, Object.entries(s.userStates || {}).map(([k, n]) => [h("dt", {}, STATE_LABEL[k] || k), h("dd", {}, fmt.format(n))]))),
     panel("Cloud",
       s.cloud
-        ? h("dl", { class: "kv num" }, h("dt", {}, "Project"), h("dd", {}, s.cloud.projectId), h("dt", {}, "Đồng bộ gần nhất"), h("dd", {}, s.cloud.last ? ago(s.cloud.last.at) : "chưa"), h("dt", {}, "Chu kỳ"), h("dd", {}, s.cloud.syncMinutes + " phút"), s.cloud.last && [h("dt", {}, "Thao tác từ điện thoại"), h("dd", {}, fmt.format(s.cloud.last.applied))])
+        ? h("dl", { class: "kv num" }, h("dt", {}, "Project"), h("dd", {}, s.cloud.projectId), h("dt", {}, "Đồng bộ gần nhất"), h("dd", {}, s.cloud.last ? ago(s.cloud.last.at) : "chưa"), h("dt", {}, "Chu kỳ"), h("dd", {}, s.cloud.syncMinutes ? s.cloud.syncMinutes + " phút" : "theo PC"), s.cloud.last && [h("dt", {}, "Thao tác từ điện thoại"), h("dd", {}, fmt.format(s.cloud.last.applied))])
         : h("p", { class: "hint" }, "Chưa bật. Điện thoại vẫn xem được khi cùng Wi-Fi. Muốn xem cả khi ra ngoài (miễn phí): làm theo infra/README.md."),
       s.cloud && s.cloud.last && !s.cloud.last.ok ? h("div", { class: "alert bad" }, s.cloud.last.error || "Đồng bộ lỗi") : null),
   ];
@@ -574,6 +696,7 @@ async function renderSystem(v) {
   v.replaceChildren(h("div", { class: "sys" }, tiles, ...alerts, pairPanel,
     h("details", { class: "more" }, h("summary", {}, "Chi tiết kỹ thuật"), h("div", { class: "grid" }, ...panels))));
   renderDetail();
+  if (CLOUD) { pairPanel.replaceChildren(h("h3", {}, "Kết nối điện thoại"), h("p", { class: "hint" }, "Ghép nối điện thoại làm trên PC: chạy npm run pair rồi quét mã QR bằng app.")); return; }
   try {
     const p = await api("/api/pair");
     const svg = new DOMParser().parseFromString(p.svg, "image/svg+xml").documentElement;
@@ -585,7 +708,7 @@ async function renderSystem(v) {
       p.lanReachable || p.cloud ? null : h("div", { class: "alert" }, "Dashboard chưa mở cho điện thoại. Chạy lại: npm run dashboard -- --lan"),
       h("div", { class: "qr" }, h("div", { class: "code" }, document.importNode(svg, true)), h("div", { style: "display:grid;gap:8px" }, steps,
         h("p", { class: "hint" }, `Mã hết hạn lúc ${new Date(p.expiresAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}. Đừng chia sẻ mã này.`),
-        h("div", {}, h("button", { class: "btn sm", onclick: async () => { try { await navigator.clipboard.writeText(p.code); toast("Đã chép mã. Dán vào app nếu không quét được."); } catch { toast("Trình duyệt không cho chép; dùng npm run pair."); } } }, "Chép mã dạng chữ"))))].filter(Boolean));
+        h("div", {}, h("button", { class: "btn sm", onclick: async () => { try { await navigator.clipboard.writeText(p.code); toast("Đã chép mã. Dán vào app nếu không quét được."); } catch { toast("Trình duyệt không cho chép; dùng npm run pair."); } } }, "Chép mã dạng chữ"), p.webLink && h("button", { class: "btn sm", style: "margin-left:8px", onclick: async () => { try { await navigator.clipboard.writeText(p.webLink); toast("Đã chép liên kết. Mở nó trong trình duyệt muốn dùng (hết hạn sau 1 giờ)."); } catch { toast("Trình duyệt không cho chép; dùng npm run pair."); } } }, "Chép liên kết mở web"))))].filter(Boolean));
   } catch (e) {
     pairPanel.replaceChildren(h("h3", {}, "Kết nối điện thoại"), h("p", { class: "hint" }, "Phiên bản dashboard này chưa tạo được mã ghép nối. Chạy npm run pair trong terminal."));
   }

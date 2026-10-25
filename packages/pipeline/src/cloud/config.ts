@@ -13,6 +13,8 @@ export interface CloudConfig {
   /** Emulator or test endpoints. Unset = Google production endpoints. */
   firestoreUrl?: string;
   authUrl?: string;
+  /** Where the hosted dashboard lives. Unset = https://<projectId>.web.app (the default Firebase Hosting site). */
+  webUrl?: string;
 }
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -34,6 +36,7 @@ export function parseCloudConfig(json: string): CloudConfig {
     syncMinutes: Math.max(2, Math.min(240, Number(raw.syncMinutes) || 10)),
     ...(raw.firestoreUrl ? { firestoreUrl: raw.firestoreUrl } : {}),
     ...(raw.authUrl ? { authUrl: raw.authUrl } : {}),
+    ...(typeof raw.webUrl === "string" && /^https:\/\/[^\s/]+\/?$/.test(raw.webUrl) ? { webUrl: raw.webUrl.replace(/\/$/, "") } : {}),
   };
 }
 
