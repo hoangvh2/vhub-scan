@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Cleartext is needed for the PC's LAN address, which is an IP that cannot be listed in advance.
-     Every request still carries the dashboard token; cloud endpoints are https URLs fixed in code. -->
+<!-- HTTPS only: the app talks to Google (sign-in) and Firebase (Auth, Firestore) and nothing else. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

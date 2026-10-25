@@ -76,4 +76,11 @@ describe("local API", () => {
     expect((await post("/api/run", {})).status).toBe(202);
     expect((await post("/api/run", {})).status).toBe(409);
   });
+  it("serves the cloud snapshot behind the token", async () => {
+    const s = (await (await get("/api/snapshot")).json()) as { schema: number; digest: { series: number[] }[]; health: { counts: Record<string, number> } };
+    expect(s.schema).toBe(1);
+    expect(s.digest[0]!.series.length).toBeGreaterThan(0);
+    expect(s.health.counts).toHaveProperty("kept");
+    expect((await fetch(base + "/api/snapshot")).status).toBe(401);
+  });
 });

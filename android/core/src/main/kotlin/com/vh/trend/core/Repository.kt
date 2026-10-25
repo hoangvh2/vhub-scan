@@ -6,36 +6,39 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import java.util.UUID
 
-enum class Source { Lan, Cloud, Cache }
+enum class Source { Cloud, Cache }
 
 data class SyncState(
-    val paired: Boolean,
+    /** This build knows its Firebase project (CI variables); without it the app cannot sign in. */
+    val configured: Boolean,
+    val signedIn: Boolean,
+    val email: String?,
     /** What the user sees: the last snapshot plus actions not yet reflected in it. */
     val snapshot: Snapshot?,
     val source: Source?,
-    val lanUrl: String?,
     /** When the shown snapshot was fetched (ms). */
     val fetchedAt: Long?,
-    /** Actions waiting to reach the PC or the cloud inbox. */
+    /** Actions waiting to reach the cloud inbox. */
     val pending: Int,
-    val cloudEnabled: Boolean,
     val error: String? = null,
 )
 
 @Serializable
-private data class Cached(val source: Source, val fetchedAt: Long, val lanUrl: String? = null, val snapshot: Snapshot)
+private data class Cached(val source: Source, val fetchedAt: Long, val snapshot: Snapshot)
 
 @Serializable
 private data class Overlay(val entityId: String, val state: String, val at: Long)
 
 /**
- * Where the phone gets its data and sends its actions. Order: the PC on the home network (freshest, applies at once),
- * then the cloud copy, then the last copy on the phone. Actions are queued on the phone first, so nothing is lost
- * offline, and are shown immediately on top of whatever snapshot is visible until a newer snapshot includes them.
+ * Where the phone gets its data and sends its actions: the cloud copy the PC published, else the last copy on the phone.
+ * Actions are queued on the phone first, so nothing is lost offline, and are shown immediately on top of whatever snapshot
+ * is visible until a newer snapshot includes them. Signing in is Google's account picker (in the app module); this class
+ * only turns the ID token into a session.
  */
 class TrendRepository(
     private val http: Http,
     private val kv: KeyValue,
+    private val settings: CloudSettings,
     private val now: () -> Long = System::currentTimeMillis,
     private val newId: () -> String = { "a" + UUID.randomUUID().toString().replace("-", "") },
     private val device: String = "android",
@@ -44,70 +47,53 @@ class TrendRepository(
     private val tokenBase: String = "https://securetoken.googleapis.com",
 ) {
     private val lock = Mutex()
+    private val auth = CloudAuth(http, settings.apiKey, kv, now, authBase, tokenBase)
+    private val cloud = CloudClient(http, auth, settings.projectId, settings.ownerUid, firestoreBase, device)
 
-    val pairCode: PairCode? get() = kv.get(K_PAIR)?.let { runCatching { TrendJson.decodeFromString(PairCode.serializer(), it) }.getOrNull() }
-
-    private fun auth(p: PairCode) = p.fb?.let { CloudAuth(http, it.k, kv, now, authBase, tokenBase) }
-    private fun cloud(p: PairCode) = p.fb?.let { CloudClient(http, auth(p)!!, it.p, it.u, firestoreBase, device) }
-
-    /** Saves the pairing. Cloud sign-in failure does not undo it: the LAN still works and the error is reported. */
-    suspend fun pair(code: PairCode): String? = lock.withLock {
+    /** Null on success, else what to tell the person. Starts from a clean slate: another account's queue must not leak in. */
+    suspend fun signIn(googleIdToken: String): String? = lock.withLock {
         clearAll()
-        kv.put(K_PAIR, TrendJson.encodeToString(PairCode.serializer(), code))
-        val fb = code.fb ?: return@withLock null
         try {
-            auth(code)!!.signIn(fb.ct)
+            auth.signInWithGoogle(googleIdToken)
             null
         } catch (e: Exception) {
-            "Đã ghép nối qua Wi-Fi, nhưng chưa vào được cloud: ${e.message}"
+            e.message ?: "Đăng nhập không thành công"
         }
     }
 
-    fun unpair() = clearAll()
+    fun signOut() = clearAll()
 
-    private fun clearAll() = listOf(K_PAIR, K_CACHE, K_QUEUE, K_OVERLAY, "cloud.idToken", "cloud.refreshToken", "cloud.idUntil").forEach { kv.put(it, null) }
+    private fun clearAll() {
+        auth.clear()
+        listOf(K_CACHE, K_QUEUE, K_OVERLAY).forEach { kv.put(it, null) }
+    }
 
     fun state(error: String? = null): SyncState {
-        val p = pairCode
         val c = cached()
         return SyncState(
-            paired = p != null,
+            configured = settings.configured,
+            signedIn = auth.signedIn,
+            email = auth.email,
             snapshot = c?.snapshot?.let { applyOverlay(it) },
             source = c?.source,
-            lanUrl = c?.lanUrl,
             fetchedAt = c?.fetchedAt,
             pending = queue().size,
-            cloudEnabled = p?.fb != null,
             error = error,
         )
     }
 
-    /** Sends queued actions and fetches the newest snapshot from the best place that answers. */
+    /** Sends queued actions and fetches the newest snapshot the PC published. */
     suspend fun refresh(): SyncState = lock.withLock {
-        val p = pairCode ?: return@withLock state()
+        if (!settings.configured || !auth.signedIn) return@withLock state()
         try {
-            val lan = LanClient(http, p.t)
-            val order = (listOfNotNull(cached()?.lanUrl) + p.lan).distinct()
-            for (base in order) {
-                // Probe first: only a PC that answers gets the queued actions.
-                val probe = lan.snapshot(base) ?: continue
-                flush { lan.send(base, it) }
-                val fresh = if (queueWasSent) lan.snapshot(base) ?: probe else probe
-                store(Cached(Source.Lan, now(), base, fresh))
-                return@withLock state()
-            }
-            val cloud = cloud(p)
-            if (cloud != null) {
-                flush { cloud.send(it) }
-                val snap = cloud.snapshot()
-                if (snap != null) store(Cached(Source.Cloud, now(), null, snap))
-                return@withLock state(if (snap == null) "PC chưa đẩy dữ liệu lên cloud. Trên PC chạy  npm run sync." else null)
-            }
-            state(if (cached() == null) "Không thấy PC trong mạng này. Ở cùng Wi-Fi với PC và chạy  npm run dashboard -- --lan." else "Đang xem bản lưu trên điện thoại; không thấy PC trong mạng này.")
+            flush { cloud.send(it) }
+            val snap = cloud.snapshot()
+            if (snap != null) store(Cached(Source.Cloud, now(), snap))
+            state(if (snap == null) "PC chưa đẩy dữ liệu lên cloud. Trên PC chạy  npm run sync." else null)
         } catch (e: AuthLost) {
             state(e.message)
         } catch (e: Exception) {
-            state("Không cập nhật được: ${e.message ?: e::class.simpleName}")
+            state(if (cached() != null) "Đang xem bản lưu trên điện thoại; chưa kết nối được cloud." else "Không cập nhật được: ${e.message ?: e::class.simpleName}")
         }
     }
 
@@ -119,14 +105,10 @@ class TrendRepository(
         state()
     }
 
-    private var queueWasSent = false
-
     private suspend fun flush(send: suspend (Event) -> Boolean) {
-        queueWasSent = false
         for (e in queue()) {
             if (!send(e)) break
             saveQueue(queue().filter { it.id != e.id })
-            queueWasSent = true
         }
     }
 
@@ -151,7 +133,6 @@ class TrendRepository(
     private fun saveOverlay(o: List<Overlay>) = kv.put(K_OVERLAY, TrendJson.encodeToString(ListSerializer(Overlay.serializer()), o))
 
     private companion object {
-        const val K_PAIR = "pair"
         const val K_CACHE = "snapshot.cache"
         const val K_QUEUE = "queue"
         const val K_OVERLAY = "overlay"

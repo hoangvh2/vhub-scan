@@ -12,8 +12,8 @@ object Fixtures {
     }
     val now: Long get() = java.time.Instant.parse(snapshot.generatedAt).toEpochMilli() + 4 * 60_000
 
-    fun ui(source: Source = Source.Lan, tab: Tab = Tab.Today, selected: String? = null, pending: Int = 0, error: String? = null) = UiState(
-        sync = SyncState(paired = true, snapshot = snapshot, source = source, lanUrl = "http://192.168.1.20:4173", fetchedAt = now - 60_000, pending = pending, cloudEnabled = true, error = error),
+    fun ui(source: Source = Source.Cloud, tab: Tab = Tab.Today, selected: String? = null, pending: Int = 0, error: String? = null) = UiState(
+        sync = SyncState(configured = true, signedIn = true, email = "you@example.com", snapshot = snapshot, source = source, fetchedAt = now - 60_000, pending = pending, error = error),
         tab = tab,
         selectedId = selected,
     )

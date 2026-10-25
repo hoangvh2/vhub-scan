@@ -68,7 +68,6 @@ fun SourceLine(s: SyncState, refreshing: Boolean, now: Long = System.currentTime
     val c = T.c
     val (color, text) = when {
         refreshing -> c.warn to "Đang cập nhật…"
-        s.source == Source.Lan -> c.pos to "PC qua Wi-Fi · ${ago(s.fetchedAt, now)}"
         s.source == Source.Cloud -> c.pos to "Cloud · PC đẩy lên ${ago(epochOf(s.snapshot?.generatedAt), now)}"
         s.snapshot != null -> c.warn to "Bản lưu · ${ago(s.fetchedAt, now)}"
         else -> c.line2 to "Chưa có dữ liệu"

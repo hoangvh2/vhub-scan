@@ -86,9 +86,8 @@ interface UiActions {
     fun act(item: Item, action: Action, message: String) {}
     fun undo(n: Notice) {}
     fun dismissNotice() {}
-    fun scan() {}
-    fun pair(text: String) {}
-    fun unpair() {}
+    fun signIn() {}
+    fun signOut() {}
 }
 
 private val TabIcons = mapOf(Tab.Today to Icons.Today, Tab.Kept to Icons.Kept, Tab.Explore to Icons.Explore, Tab.System to Icons.System)
@@ -98,7 +97,7 @@ private val TabIcons = mapOf(Tab.Today to Icons.Today, Tab.Kept to Icons.Kept, T
 @Composable
 fun TrendApp(ui: UiState, on: UiActions, now: Long = System.currentTimeMillis()) {
     val c = T.c
-    if (!ui.sync.paired) return PairScreen(ui, on)
+    if (!ui.sync.signedIn) return SignInScreen(ui, on)
     val snack = remember { SnackbarHostState() }
     LaunchedEffect(ui.notice?.id) {
         val n = ui.notice ?: return@LaunchedEffect
@@ -201,8 +200,7 @@ fun ListPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier, highligh
             if (items.isEmpty()) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     when {
-                        ui.snapshot == null && ui.sync.cloudEnabled -> EmptyState("Chưa có dữ liệu trên cloud", "Trên PC chạy lệnh dưới để đẩy dữ liệu lên, rồi kéo xuống để cập nhật.", code = "npm run sync")
-                        ui.snapshot == null -> EmptyState("Chưa có dữ liệu", "Ở cùng Wi-Fi với PC và giữ dashboard chạy với --lan, rồi kéo xuống để cập nhật.", code = "npm run dashboard -- --lan")
+                        ui.snapshot == null -> EmptyState("Chưa có dữ liệu trên cloud", "Trên PC chạy lệnh dưới để đẩy dữ liệu lên, rồi kéo xuống để cập nhật.", code = "npm run sync")
                         ui.tab == Tab.Today && ui.snapshot?.health?.lastRun == null -> EmptyState("PC chưa quét lần nào", "Chạy lần quét đầu tiên trên PC (vài phút).", code = "npm run scan")
                         ui.tab == Tab.Today -> EmptyState("Hôm nay không có ý nào đáng xem", "Lần quét gần nhất không có gì vượt ngưỡng.", "Xem toàn bộ ý đã phân tích" to { on.tab(Tab.Explore) })
                         ui.tab == Tab.Kept -> EmptyState("Chưa giữ ý nào", "Bấm Giữ ở Hôm nay hoặc Khám phá. Ý đã giữ nằm ở đây tới khi bạn đánh dấu Xong.")
@@ -353,17 +351,16 @@ fun SystemPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier) {
         val pct = tokens?.let { (it.used * 100 / it.limit.coerceAtLeast(1)).coerceIn(0, 100) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Tile("Lần quét", r?.let { ago(epochOf(it.startedAt), now) } ?: "Chưa có", Modifier.weight(1f), bad = r?.status == "failed")
-            Tile("Đang xem", when (ui.sync.source) { Source.Lan -> "PC, Wi-Fi"; Source.Cloud -> "Cloud"; Source.Cache -> "Bản lưu"; null -> "Chưa có" }, Modifier.weight(1f))
+            Tile("Đang xem", when (ui.sync.source) { Source.Cloud -> "Cloud"; Source.Cache -> "Bản lưu"; null -> "Chưa có" }, Modifier.weight(1f))
             Tile("AI hôm nay", pct?.let { "$it%" } ?: "–", Modifier.weight(1f), bad = (pct ?: 0) > 85)
         }
-        Panel("Kết nối") {
-            KV("Cloud", if (ui.sync.cloudEnabled) "Đã bật" else "Chưa bật")
+        Panel("Tài khoản") {
+            KV("Đăng nhập", ui.sync.email ?: "–")
             if (ui.sync.pending > 0) KV("Thao tác chờ gửi", num(ui.sync.pending))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                 QuietButton("Cập nhật", Icons.Refresh) { on.refresh() }
-                QuietButton("Ghép nối lại", Icons.Scan) { on.scan() }
             }
-            TextButton(onClick = { confirm = true }, modifier = Modifier.testTag("unpair")) { Text("Huỷ ghép nối", color = c.neg) }
+            TextButton(onClick = { confirm = true }, modifier = Modifier.testTag("signout")) { Text("Đăng xuất", color = c.neg) }
         }
         TextButton(onClick = { tech = !tech }, modifier = Modifier.testTag("tech")) {
             Text(if (tech) "Ẩn chi tiết kỹ thuật" else "Chi tiết kỹ thuật", color = c.ink2, fontWeight = FontWeight.SemiBold)
@@ -393,24 +390,23 @@ fun SystemPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier) {
                     KV("Số lần gọi", num(t.calls))
                 }
             }
-            ui.sync.lanUrl?.let { Panel("Địa chỉ PC") { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.ink) } }
         }
         r?.error?.let { Notice(it) }
     }
-    if (confirm) UnpairDialog(onCancel = { confirm = false }, onConfirm = { confirm = false; on.unpair() })
+    if (confirm) SignOutDialog(onCancel = { confirm = false }, onConfirm = { confirm = false; on.signOut() })
 }
 
-/** Destructive: forgets the pairing, the saved copy and unsent actions. Cancel on the left, the red action on the right. */
+/** Destructive: forgets the sign-in, the saved copy and unsent actions. Cancel on the left, the red action on the right. */
 @Composable
-fun UnpairDialog(onCancel: () -> Unit, onConfirm: () -> Unit) {
+fun SignOutDialog(onCancel: () -> Unit, onConfirm: () -> Unit) {
     val c = T.c
     AlertDialog(
         onDismissRequest = onCancel,
         containerColor = c.raised,
-        title = { Text("Huỷ ghép nối với PC?", color = c.ink) },
-        text = { Text("Điện thoại sẽ quên PC, bản lưu và các thao tác chưa gửi. Danh sách trên PC không bị ảnh hưởng.", color = c.ink2) },
-        dismissButton = { TextButton(onClick = onCancel, modifier = Modifier.testTag("unpair-cancel")) { Text("Không", color = c.ink) } },
-        confirmButton = { TextButton(onClick = onConfirm, modifier = Modifier.testTag("unpair-confirm")) { Text("Huỷ ghép nối", color = c.neg, fontWeight = FontWeight.SemiBold) } },
+        title = { Text("Đăng xuất?", color = c.ink) },
+        text = { Text("Điện thoại sẽ quên tài khoản, bản lưu và các thao tác chưa gửi. Danh sách trên PC không bị ảnh hưởng.", color = c.ink2) },
+        dismissButton = { TextButton(onClick = onCancel, modifier = Modifier.testTag("signout-cancel")) { Text("Không", color = c.ink) } },
+        confirmButton = { TextButton(onClick = onConfirm, modifier = Modifier.testTag("signout-confirm")) { Text("Đăng xuất", color = c.neg, fontWeight = FontWeight.SemiBold) } },
     )
 }
 
@@ -448,42 +444,20 @@ private fun KV(k: String, v: String) {
 }
 
 @Composable
-fun PairScreen(ui: UiState, on: UiActions) {
+fun SignInScreen(ui: UiState, on: UiActions) {
     val c = T.c
-    var text by rememberSaveable { mutableStateOf("") }
-    var paste by rememberSaveable { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("VHub Trend", style = MaterialTheme.typography.labelLarge, color = c.mute)
-        Text("Kết nối với PC", style = MaterialTheme.typography.headlineSmall, color = c.ink)
-        Text("Xem và sắp xếp những ý tưởng mà PC đã quét.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
-        Column(Modifier.clip(RoundedCornerShape(8.dp)).background(c.raised).border(1.dp, c.line, RoundedCornerShape(8.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Step(1, "Trên PC chạy:  npm run pair  (hoặc mở dashboard → Hệ thống)")
-            Step(2, "Bấm Quét mã QR bên dưới")
+        Text("Đăng nhập", style = MaterialTheme.typography.headlineSmall, color = c.ink)
+        Text("Xem và duyệt những ý tưởng mà PC đã quét. Chỉ tài khoản Google nằm trong danh sách cho phép mới vào được.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
+        if (!ui.sync.configured) {
+            Notice("Bản APK này chưa được cấu hình Firebase. Đặt 3 biến FIREBASE_PROJECT_ID, FIREBASE_API_KEY, FIREBASE_WEB_CLIENT_ID trong GitHub (Settings → Secrets and variables → Actions → Variables) rồi chạy lại workflow Android.")
+        } else {
+            QuietButton(if (ui.signingIn) "Đang đăng nhập…" else "Đăng nhập với Google", modifier = Modifier.fillMaxWidth().testTag("signin")) { if (!ui.signingIn) on.signIn() }
         }
-        QuietButton("Quét mã QR", Icons.Scan, modifier = Modifier.fillMaxWidth()) { on.scan() }
-        TextButton(onClick = { paste = !paste }) { Text(if (paste) "Ẩn ô dán mã" else "Không quét được? Dán mã dạng chữ", color = c.ink2) }
-        if (paste) {
-            OutlinedTextField(
-                value = text, onValueChange = { text = it }, minLines = 3, placeholder = { Text("{\"v\":1,…} (lệnh npm run pair in ra)") },
-                modifier = Modifier.fillMaxWidth().testTag("pair-input"), shape = RoundedCornerShape(8.dp),
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = c.ink2, unfocusedBorderColor = c.line2, focusedContainerColor = c.raised, unfocusedContainerColor = c.raised),
-            )
-            QuietButton(if (ui.pairing) "Đang kết nối…" else "Kết nối", modifier = Modifier.fillMaxWidth()) { if (!ui.pairing) on.pair(text) }
-        }
-        ui.pairError?.let { Notice(it) }
-        Spacer(Modifier.height(8.dp))
-        Text("Mã QR cho phép xem và sửa danh sách của bạn: đừng chia sẻ.", style = MaterialTheme.typography.bodySmall, color = c.mute)
-    }
-}
-
-@Composable
-private fun Step(n: Int, text: String) {
-    val c = T.c
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("$n", style = MaterialTheme.typography.labelLarge, color = c.accent, modifier = Modifier.width(14.dp))
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = c.ink)
+        (ui.signInError ?: ui.sync.error)?.let { Notice(it) }
     }
 }

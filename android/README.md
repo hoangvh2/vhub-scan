@@ -2,28 +2,31 @@
 
 App điện thoại xem và xử lý danh sách ý tưởng mà PC đã quét. PC vẫn là nơi giữ dữ liệu; app chỉ đọc bản chụp (snapshot) và gửi lại thao tác của bạn (giữ, bỏ, để sau…).
 
-- Mặc định (đã bật cloud theo [`infra/README.md`](../infra/README.md)): app đọc bản chụp PC đã đẩy lên Firestore, ở đâu cũng xem được. Thao tác duyệt được PC áp dụng ở lần đồng bộ kế tiếp (sau mỗi lần quét, hoặc mỗi 10 phút khi dashboard đang chạy).
-- Tùy chọn khi cùng Wi-Fi: app gọi thẳng PC (`npm run dashboard -- --lan`) cho nhanh và thấy thay đổi ngay.
+- Đăng nhập bằng tài khoản Google (hộp chọn tài khoản của Android). Chỉ địa chỉ trong `allowed_emails` ([`infra/README.md`](../infra/README.md)) đọc được dữ liệu.
+- App đọc bản chụp PC đã đẩy lên Firestore, ở đâu cũng xem được. Thao tác duyệt được PC áp dụng ở lần đồng bộ kế tiếp (sau mỗi lần quét, hoặc mỗi 10 phút khi dashboard đang chạy).
 - Không mạng: app hiện bản chụp gần nhất, ghi thao tác vào hàng đợi và gửi khi có mạng.
 
 ## Trạng thái (thật)
 
 | Phần | Trạng thái | Bằng chứng |
 |---|---|---|
-| Lõi Kotlin (đọc mã ghép nối, LAN, Firestore REST, hàng đợi, bộ nhớ đệm) | MVP | 14 test JVM, đọc lại mẫu `docs/contract/snapshot.v1.json` do test PC sinh ra |
+| Lõi Kotlin (đổi token Google lấy phiên Firebase, Firestore REST, quyền, hàng đợi, bộ nhớ đệm) | MVP | 13 test JVM, đọc lại mẫu `docs/contract/snapshot.v1.json` do test PC sinh ra |
 | Giao diện Compose (điện thoại, máy tính bảng, sáng/tối) | MVP | Test Robolectric + ảnh chụp màn hình trong artifact `android-screenshots` của CI |
 | APK release ký trong CI | MVP | Workflow `Android`, bước `apksigner verify` (chữ ký v2) |
-| Cài lên điện thoại thật, quét QR thật, đồng bộ qua Firebase thật | **Chưa kiểm** | Việc đầu tiên của bạn, theo các bước dưới |
+| Cài lên điện thoại thật, đăng nhập Google thật, đồng bộ qua Firebase thật | **Chưa kiểm** | Việc đầu tiên của bạn, theo các bước dưới |
 
 ## Cài app (5 phút)
 
 1. Mở https://github.com/hoangvh2/vhub-scan/actions/workflows/android.yml → bấm lần chạy mới nhất có dấu xanh → kéo xuống **Artifacts** → tải `VHubTrend-apk-release` (hoặc `VHubTrend-apk-throwaway` nếu chưa đặt khóa, xem bên dưới). Khi đã có bản phát hành, lấy file `.apk` ở mục **Releases** của repo cho tiện.
 2. Giải nén, chép file `.apk` sang điện thoại (Google Drive, cáp USB, Zalo "Cloud của tôi"…), mở file.
 3. Android hỏi "Cài ứng dụng không rõ nguồn gốc" → cho phép với ứng dụng bạn dùng để mở file → **Cài đặt**.
-4. Trên PC: chạy `npm run pair` để in mã QR (hoặc mở trang **Hệ thống** trên dashboard web, mã QR ở đó). Đã bật cloud thì không cần làm gì thêm; chưa bật cloud thì chạy thêm `npm run dashboard -- --lan` và giữ cửa sổ mở.
-5. Trong app: **Quét mã QR** → hướng camera vào mã. Không quét được thì bấm **Không quét được? Dán mã dạng chữ** và dán đoạn chữ in dưới mã QR.
+4. Mở app → **Đăng nhập với Google** → chọn tài khoản có trong `allowed_emails`.
 
-Yêu cầu: Android 8.0 trở lên. Quét QR dùng trình quét của Google Play services, app không xin quyền camera.
+Yêu cầu: Android 8.0 trở lên, có tài khoản Google trên máy và Google Play services.
+
+### Đăng nhập chỉ chạy khi đã làm Bước 9 của [`infra/README.md`](../infra/README.md)
+
+APK phải được build cùng 4 biến GitHub `FIREBASE_PROJECT_ID`, `FIREBASE_API_KEY`, `FIREBASE_WEB_CLIENT_ID`, `FIREBASE_OWNER_UID`, và SHA-1 của khóa ký phải được đăng ký trong Firebase (workflow in SHA-1 ở **Summary** của mỗi lần chạy). APK thiếu biến hiện thông báo cấu hình thay vì nút đăng nhập.
 
 ## Khóa ký APK (làm một lần, 5 phút)
 
@@ -47,7 +50,7 @@ Không dùng `gh`: bỏ `-Upload`/`--upload`, script in ra 4 giá trị; thêm t
 | `ANDROID_KEY_ALIAS` | `vhubtrend` |
 | `ANDROID_KEY_PASSWORD` | giống `ANDROID_KEYSTORE_PASSWORD` |
 
-Mất khóa = phải gỡ app cũ rồi cài lại (mất ghép nối, ghép lại 1 phút). Script từ chối tạo đè khóa đã có.
+Mất khóa = phải gỡ app cũ rồi cài lại, và đăng ký SHA-1 của khóa mới trong Firebase (Bước 9 của `infra/README.md`). Script từ chối tạo đè khóa đã có.
 
 ## Phát hành
 

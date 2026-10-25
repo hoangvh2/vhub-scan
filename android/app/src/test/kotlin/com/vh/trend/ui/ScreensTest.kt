@@ -32,6 +32,9 @@ class ScreensTest {
         rule.onRoot().captureRoboImage("build/screenshots/$name.png")
     }
 
+    private fun signedOut(configured: Boolean = true, error: String? = null) =
+        Fixtures.ui().let { it.copy(sync = it.sync.copy(configured = configured, signedIn = false, email = null, snapshot = null, error = error)) }
+
     @Test @Config(qualifiers = PHONE) fun phoneToday() = shot("phone-today-light", Fixtures.ui())
     @Test @Config(qualifiers = PHONE) fun phoneTodayDark() = shot("phone-today-dark", Fixtures.ui(), dark = true)
     @Test @Config(qualifiers = PHONE) fun phoneDetail() = shot("phone-detail-light", Fixtures.ui(selected = Fixtures.snapshot.digest.first().id))
@@ -39,8 +42,10 @@ class ScreensTest {
     @Test @Config(qualifiers = SMALL_PHONE) fun smallPhoneDetail() = shot("phone360-detail-light", Fixtures.ui(selected = Fixtures.snapshot.digest.first().id))
     @Test @Config(qualifiers = PHONE) fun phoneKeptFromCloud() = shot("phone-kept-cloud", Fixtures.ui(Source.Cloud, Tab.Kept, pending = 2))
     @Test @Config(qualifiers = PHONE) fun phoneSystem() = shot("phone-system-dark", Fixtures.ui(tab = Tab.System), dark = true)
-    @Test @Config(qualifiers = PHONE) fun phoneOffline() = shot("phone-offline-cache", Fixtures.ui(Source.Cache, error = "Đang xem bản lưu trên điện thoại; không thấy PC trong mạng này."))
-    @Test @Config(qualifiers = PHONE) fun phonePair() = shot("phone-pair", Fixtures.ui().let { it.copy(sync = it.sync.copy(paired = false, snapshot = null)) })
+    @Test @Config(qualifiers = PHONE) fun phoneOffline() = shot("phone-offline-cache", Fixtures.ui(Source.Cache, error = "Đang xem bản lưu trên điện thoại; chưa kết nối được cloud."))
+    @Test @Config(qualifiers = PHONE) fun phoneSignIn() = shot("phone-signin", signedOut())
+    @Test @Config(qualifiers = PHONE) fun phoneSignInRefused() = shot("phone-signin-refused", signedOut(error = "Tài khoản me@example.com không nằm trong danh sách được phép. Thêm địa chỉ vào allowed_emails (infra/terraform.tfvars) rồi chạy terraform apply, hoặc đăng xuất và dùng tài khoản khác."), dark = true)
+    @Test @Config(qualifiers = PHONE) fun phoneSignInNotConfigured() = shot("phone-signin-unconfigured", signedOut(configured = false))
     @Test @Config(qualifiers = TABLET) fun tabletToday() = shot("tablet-today-light", Fixtures.ui())
     @Test @Config(qualifiers = TABLET) fun tabletExploreDark() = shot("tablet-explore-dark", Fixtures.ui(tab = Tab.Explore), dark = true)
 
@@ -63,24 +68,32 @@ class ScreensTest {
 
     // Destructive action (CLAUDE.md): a confirmation dialog, tested for both "Không" and the red action.
     @Test @Config(qualifiers = PHONE)
-    fun unpairAsksFirstAndNoKeepsThePairing() {
-        var unpaired = 0
-        rule.setContent { TrendTheme { TrendApp(Fixtures.ui(tab = Tab.System), object : UiActions { override fun unpair() { unpaired++ } }, Fixtures.now) } }
-        rule.onNodeWithTag("unpair").performScrollTo().performClick()
+    fun signOutAsksFirstAndNoKeepsTheSession() {
+        var signedOut = 0
+        rule.setContent { TrendTheme { TrendApp(Fixtures.ui(tab = Tab.System), object : UiActions { override fun signOut() { signedOut++ } }, Fixtures.now) } }
+        rule.onNodeWithTag("signout").performScrollTo().performClick()
         // The dialog is its own window, so onRoot() would match two roots; capture the dialog itself.
-        rule.onNode(isDialog()).captureRoboImage("build/screenshots/phone-unpair-confirm.png")
-        rule.onNodeWithTag("unpair-cancel").performClick()
+        rule.onNode(isDialog()).captureRoboImage("build/screenshots/phone-signout-confirm.png")
+        rule.onNodeWithTag("signout-cancel").performClick()
         rule.waitForIdle()
-        assertEquals(0, unpaired)
+        assertEquals(0, signedOut)
     }
 
     @Test @Config(qualifiers = PHONE)
-    fun unpairConfirmedForgetsThePc() {
-        var unpaired = 0
-        rule.setContent { TrendTheme { TrendApp(Fixtures.ui(tab = Tab.System), object : UiActions { override fun unpair() { unpaired++ } }, Fixtures.now) } }
-        rule.onNodeWithTag("unpair").performScrollTo().performClick()
-        rule.onNodeWithTag("unpair-confirm").performClick()
+    fun signOutConfirmedForgetsTheAccount() {
+        var signedOut = 0
+        rule.setContent { TrendTheme { TrendApp(Fixtures.ui(tab = Tab.System), object : UiActions { override fun signOut() { signedOut++ } }, Fixtures.now) } }
+        rule.onNodeWithTag("signout").performScrollTo().performClick()
+        rule.onNodeWithTag("signout-confirm").performClick()
         rule.waitForIdle()
-        assertEquals(1, unpaired)
+        assertEquals(1, signedOut)
+    }
+
+    @Test @Config(qualifiers = PHONE)
+    fun signInButtonAsksForTheGoogleAccountPicker() {
+        var asked = 0
+        rule.setContent { TrendTheme { TrendApp(signedOut(), object : UiActions { override fun signIn() { asked++ } }, Fixtures.now) } }
+        rule.onNodeWithTag("signin").performClick()
+        assertEquals(1, asked)
     }
 }

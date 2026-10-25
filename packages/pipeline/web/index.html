@@ -732,7 +732,7 @@ async function renderSystem(v) {
       : s.cloud ? h("p", { class: "hint" }, "Xem trên web và điện thoại: đăng nhập bằng Google. Ai được vào do allowed_emails trong infra/terraform.tfvars (rồi terraform apply). Dữ liệu đẩy lên cloud mỗi lần đồng bộ.")
       : h("p", { class: "hint" }, "Cloud chưa bật nên chỉ xem được trên máy này. Bật cloud để xem trên web và điện thoại bằng tài khoản Google: infra/README.md."),
     CLOUD ? signOutBtn : null);
-  pairPanel.id = "pair";
+  pairPanel.id = "account";
   const bad = r && r.status === "failed";
   const tiles = h("div", { class: "tiles" },
     h("div", { class: "tile" + (bad ? " bad" : "") }, h("small", {}, "Lần quét gần nhất"), h("b", {}, r ? (r.status === "running" ? "Đang chạy…" : ago(r.started_at)) : "Chưa có"), bad ? h("small", {}, "Bị lỗi") : null),
