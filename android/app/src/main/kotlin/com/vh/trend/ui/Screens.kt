@@ -201,6 +201,7 @@ fun ListPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier, highligh
             if (items.isEmpty()) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     when {
+                        ui.snapshot == null && ui.sync.cloudEnabled -> EmptyState("Chưa có dữ liệu trên cloud", "Trên PC chạy lệnh dưới để đẩy dữ liệu lên, rồi kéo xuống để cập nhật.", code = "npm run sync")
                         ui.snapshot == null -> EmptyState("Chưa có dữ liệu", "Ở cùng Wi-Fi với PC và giữ dashboard chạy với --lan, rồi kéo xuống để cập nhật.", code = "npm run dashboard -- --lan")
                         ui.tab == Tab.Today && ui.snapshot?.health?.lastRun == null -> EmptyState("PC chưa quét lần nào", "Chạy lần quét đầu tiên trên PC (vài phút).", code = "npm run scan")
                         ui.tab == Tab.Today -> EmptyState("Hôm nay không có ý nào đáng xem", "Lần quét gần nhất không có gì vượt ngưỡng.", "Xem toàn bộ ý đã phân tích" to { on.tab(Tab.Explore) })
@@ -459,9 +460,8 @@ fun PairScreen(ui: UiState, on: UiActions) {
         Text("Kết nối với PC", style = MaterialTheme.typography.headlineSmall, color = c.ink)
         Text("Xem và sắp xếp những ý tưởng mà PC đã quét.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
         Column(Modifier.clip(RoundedCornerShape(8.dp)).background(c.raised).border(1.dp, c.line, RoundedCornerShape(8.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Step(1, "Trên PC chạy:  npm run dashboard -- --lan")
-            Step(2, "Chạy npm run pair (hoặc mở dashboard → Hệ thống)")
-            Step(3, "Bấm Quét mã QR bên dưới")
+            Step(1, "Trên PC chạy:  npm run pair  (hoặc mở dashboard → Hệ thống)")
+            Step(2, "Bấm Quét mã QR bên dưới")
         }
         QuietButton("Quét mã QR", Icons.Scan, modifier = Modifier.fillMaxWidth()) { on.scan() }
         TextButton(onClick = { paste = !paste }) { Text(if (paste) "Ẩn ô dán mã" else "Không quét được? Dán mã dạng chữ", color = c.ink2) }

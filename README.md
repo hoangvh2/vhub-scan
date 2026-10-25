@@ -32,7 +32,7 @@ Mọi lệnh dưới đây chạy trong thư mục repo này.
 | 6 | `npm run scan` | Một lần quét đầy đủ (vài phút) |
 | 7 | `npm run dashboard` | In link `http://localhost:4173/?t=<token>`, mở link đó trong trình duyệt |
 
-Xem trên điện thoại: cùng Wi-Fi thì chỉ cần app Android và `npm run dashboard -- --lan`; muốn xem cả khi ra ngoài thì bật cloud miễn phí theo [`infra/README.md`](infra/README.md) (khoảng 15 phút, một lần).
+Xem trên điện thoại: bật cloud miễn phí một lần theo [`infra/README.md`](infra/README.md) (khoảng 15 phút), rồi `npm run pair` và quét mã trong app; ở đâu cũng xem được, không cần mở dashboard. Chưa bật cloud thì dùng `npm run dashboard -- --lan` để xem khi cùng Wi-Fi.
 
 Hằng ngày: `npm run scan` (hoặc `npm run schedule` để in lệnh đặt lịch tự chạy), `npm run status` để xem lần chạy gần nhất. Các lệnh khác: `npm run trend -- help`.
 

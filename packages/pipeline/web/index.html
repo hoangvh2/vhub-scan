@@ -579,9 +579,10 @@ async function renderSystem(v) {
     const svg = new DOMParser().parseFromString(p.svg, "image/svg+xml").documentElement;
     const steps = h("ol", {},
       h("li", {}, "Cài app VHub Trend (APK ở mục Releases của repo)."),
-      h("li", {}, "Mở app, bấm Quét mã QR rồi hướng camera vào mã bên cạnh."));
+      h("li", {}, "Mở app, bấm Quét mã QR rồi hướng camera vào mã bên cạnh."),
+      p.cloud ? h("li", {}, "Xong. App đọc dữ liệu từ cloud, ở đâu cũng xem được.") : null);
     pairPanel.replaceChildren(...[h("h3", {}, "Kết nối điện thoại"),
-      p.lanReachable ? null : h("div", { class: "alert" }, "Dashboard chưa mở cho điện thoại. Chạy lại: npm run dashboard -- --lan"),
+      p.lanReachable || p.cloud ? null : h("div", { class: "alert" }, "Dashboard chưa mở cho điện thoại. Chạy lại: npm run dashboard -- --lan"),
       h("div", { class: "qr" }, h("div", { class: "code" }, document.importNode(svg, true)), h("div", { style: "display:grid;gap:8px" }, steps,
         h("p", { class: "hint" }, `Mã hết hạn lúc ${new Date(p.expiresAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}. Đừng chia sẻ mã này.`),
         h("div", {}, h("button", { class: "btn sm", onclick: async () => { try { await navigator.clipboard.writeText(p.code); toast("Đã chép mã. Dán vào app nếu không quét được."); } catch { toast("Trình duyệt không cho chép; dùng npm run pair."); } } }, "Chép mã dạng chữ"))))].filter(Boolean));

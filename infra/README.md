@@ -81,11 +81,12 @@ npm run doctor
 
 ## Bước 7. Ghép nối điện thoại
 
-1. Trên PC: `npm run dashboard -- --lan` (giữ cửa sổ mở).
-2. Mở dashboard trên PC → **Hệ thống → Kết nối điện thoại**, mã QR hiện ra (hạn 1 giờ). Hoặc chạy `npm run pair` để lấy mã dạng chữ.
-3. Trên điện thoại: mở app **VHub Trend** → **Kết nối với PC** → **Quét mã**.
+1. Trên PC chạy `npm run pair`: in mã QR (hạn 1 giờ) và mã dạng chữ. Hoặc mở dashboard trên PC → **Hệ thống → Kết nối điện thoại**.
+2. Trên điện thoại: mở app **VHub Trend** → **Kết nối với PC** → **Quét mã**.
 
-Từ đó app tự chọn: cùng Wi-Fi thì nói chuyện thẳng với PC; ra ngoài thì đọc bản PC đã đẩy lên cloud. PC đồng bộ sau mỗi `npm run scan` và mỗi 10 phút khi dashboard đang chạy; muốn ngay: `npm run sync`.
+Xong. App đọc dữ liệu PC đã đẩy lên cloud, ở đâu cũng xem được; không cần mở dashboard hay cùng Wi-Fi. (Tùy chọn: nếu muốn app hỏi thẳng PC cho nhanh khi cùng Wi-Fi, chạy `npm run dashboard -- --lan` và giữ cửa sổ mở; app tự ưu tiên đường đó khi thấy PC.)
+
+Về mã: nó chứa "chìa khóa" Firebase để điện thoại đọc dữ liệu của bạn (app không có màn đăng nhập), nên đừng chia sẻ. PC đồng bộ sau mỗi `npm run scan` và mỗi 10 phút khi dashboard đang chạy; muốn ngay: `npm run sync`.
 
 ## Việc thường làm
 
