@@ -19,8 +19,6 @@ export interface ServerOptions {
   /** Starts a pipeline run in the background; resolves when it has been started (not finished). */
   runNow?: () => Promise<{ started: boolean; reason?: string }>;
   webDir?: string;
-  /** Pairing code for the phone (fresh custom token on each call). Unset = pairing not offered. */
-  pair?: () => { code: string; svg: string; lan: string[]; cloud: boolean; lanReachable: boolean; expiresAt: string };
   /** Extra fields for /api/health (sync status). */
   extraHealth?: () => Record<string, unknown>;
 }
@@ -82,11 +80,8 @@ export function createApp(o: ServerOptions): Server {
         if (!authorised(req, url, o.token)) return send(res, 401, { error: "unauthorised" });
 
         if (req.method === "GET" && url.pathname === "/api/health") return send(res, 200, { ...(health(o.db, o.budget, clock.now()) as object), ...(o.extraHealth?.() ?? {}) });
+        // The full snapshot as published to the cloud; handy for debugging and for regenerating the app's screenshot fixture.
         if (req.method === "GET" && url.pathname === "/api/snapshot") return send(res, 200, buildSnapshot(o.db, o.store, o.budget, clock.now(), { maxBytes: Infinity }));
-        if (req.method === "GET" && url.pathname === "/api/pair") {
-          if (!o.pair) return send(res, 501, { error: "not available" });
-          return send(res, 200, o.pair());
-        }
         if (req.method === "GET" && url.pathname === "/api/digest") return send(res, 200, digestFor(o.db, o.store, url.searchParams.get("day") ?? undefined));
         if (req.method === "GET" && url.pathname === "/api/entities") {
           return send(res, 200, {

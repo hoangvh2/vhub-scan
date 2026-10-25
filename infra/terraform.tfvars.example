@@ -1,6 +1,12 @@
 # Copy to terraform.tfvars (never committed) and fill in.
 project_id = "vhub-trend-123456" # Project ID (not the display name) of the project you created in README step 2
 
-# Optional
+# Who may sign in to the dashboard and the app (Google accounts). Anyone else is refused by the Firestore rules.
+allowed_emails = ["you@gmail.com"]
+
+# Optional; see infra/README.md step 7 and 8
+# web_client_id = "1234567890-abc123.apps.googleusercontent.com"
+# android_sha1  = ["AB:CD:...:EF"]
+
 # firestore_location = "asia-southeast1"
 # create_pc_key      = true

@@ -51,7 +51,7 @@ collect -> refresh -> rules -> score -> triage (LLM) -> enrich -> card (LLM) -> 
 ## Roadmap
 
 1. **Calibrate (next):** run live for a week, label ~100 items Keep/Skip, tune rules and SimHash threshold, measure the real funnel.
-2. **Android app** (Kotlin Compose, reads the PC's API over LAN with the token), release APK signed in CI on merge to `main`.
-3. **Cloud (optional), built 2026-10-24:** own GCP project on the free Spark plan, Terraform in `infra/` in the style of `hoangvh2/my-recap`, Firestore rules in `firebase/`, the PC pushes one snapshot document and drains a phone inbox; the phone signs in with a custom token minted at pairing. No Hosting yet (the dashboard stays on the PC). Details and data contract: [`SYNC.md`](SYNC.md).
+2. **Android app** (Kotlin Compose, signs in with Google, reads the cloud copy), release APK signed in CI on merge to `main`.
+3. **Cloud (optional), built 2026-10-24:** own GCP project on the free Spark plan, Terraform in `infra/` in the style of `hoangvh2/my-recap`, Firestore rules in `firebase/`, the PC pushes one snapshot document and drains a phone inbox; web (Firebase Hosting) and phone sign in with Google and only addresses in an allowlist (Terraform `allowed_emails`, enforced by the Firestore rules) can read or write; no QR pairing (replaced 2026-10-25). Details and data contract: [`SYNC.md`](SYNC.md).
 
 Facebook stays manual: you read, and add the builder's GitHub handle to `sources.github.seeds` once.

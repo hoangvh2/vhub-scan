@@ -8,7 +8,12 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import java.net.URLEncoder
 
-/** Firebase Auth over REST: one custom-token sign-in at pairing, then refresh tokens. No Firebase SDK. */
+/** Identifiers baked into the APK at build time (CI repository variables; none is a secret). Blank = this build has no cloud. */
+data class CloudSettings(val projectId: String, val apiKey: String, val webClientId: String, val ownerUid: String = "owner") {
+    val configured: Boolean get() = projectId.isNotBlank() && apiKey.isNotBlank() && webClientId.isNotBlank() && ownerUid.isNotBlank()
+}
+
+/** Firebase Auth over REST: Google ID token in, Firebase session out, then refresh tokens. No Firebase SDK. */
 class CloudAuth(
     private val http: Http,
     private val apiKey: String,
@@ -17,13 +22,24 @@ class CloudAuth(
     private val authBase: String = "https://identitytoolkit.googleapis.com",
     private val tokenBase: String = "https://securetoken.googleapis.com",
 ) {
-    suspend fun signIn(customToken: String) {
-        val body = buildJsonObject { put("token", customToken); put("returnSecureToken", true) }.toString()
-        val r = http.send(HttpRequest("POST", "$authBase/v1/accounts:signInWithCustomToken?key=$apiKey", mapOf("content-type" to "application/json"), body))
+    /** Exchanges the ID token Google's account picker returned for a Firebase session. Returns the account's address. */
+    suspend fun signInWithGoogle(googleIdToken: String): String {
+        val body = buildJsonObject {
+            put("postBody", "id_token=" + URLEncoder.encode(googleIdToken, "UTF-8") + "&providerId=google.com")
+            put("requestUri", "http://localhost")
+            put("returnSecureToken", true)
+            put("returnIdpCredential", true)
+        }.toString()
+        val r = http.send(HttpRequest("POST", "$authBase/v1/accounts:signInWithIdp?key=$apiKey", mapOf("content-type" to "application/json"), body))
         val j = TrendJson.parseToJsonElement(r.body.ifBlank { "{}" }).jsonObject
         if (!r.ok) throw CloudError(explain(j, "đăng nhập cloud"))
+        val email = j["email"]?.jsonPrimitive?.content.orEmpty()
+        kv.put(K_EMAIL, email)
         save(j["idToken"]!!.jsonPrimitive.content, j["refreshToken"]!!.jsonPrimitive.content, j["expiresIn"]?.jsonPrimitive?.content?.toLongOrNull() ?: 3600)
+        return email
     }
+
+    val email: String? get() = kv.get(K_EMAIL)?.takeIf { it.isNotBlank() }
 
     val signedIn: Boolean get() = kv.get(K_REFRESH) != null
 
@@ -31,13 +47,13 @@ class CloudAuth(
     suspend fun idToken(): String {
         val until = kv.get(K_UNTIL)?.toLongOrNull() ?: 0
         kv.get(K_ID)?.let { if (now() < until) return it }
-        val refresh = kv.get(K_REFRESH) ?: throw AuthLost("Điện thoại chưa đăng nhập cloud. Ghép nối lại với PC.")
+        val refresh = kv.get(K_REFRESH) ?: throw AuthLost("Chưa đăng nhập. Đăng nhập bằng Google để xem.")
         val form = "grant_type=refresh_token&refresh_token=" + URLEncoder.encode(refresh, "UTF-8")
         val r = http.send(HttpRequest("POST", "$tokenBase/v1/token?key=$apiKey", mapOf("content-type" to "application/x-www-form-urlencoded"), form))
         val j = TrendJson.parseToJsonElement(r.body.ifBlank { "{}" }).jsonObject
         if (r.code == 400 || r.code == 401 || r.code == 403) {
             kv.put(K_REFRESH, null)
-            throw AuthLost("Quyền cloud của điện thoại đã bị thu hồi. Ghép nối lại với PC.")
+            throw AuthLost("Phiên đăng nhập đã hết hạn hoặc bị thu hồi. Đăng nhập lại bằng Google.")
         }
         if (!r.ok) throw CloudError(explain(j, "làm mới đăng nhập"))
         val id = j["id_token"]!!.jsonPrimitive.content
@@ -45,7 +61,7 @@ class CloudAuth(
         return id
     }
 
-    fun clear() = listOf(K_ID, K_REFRESH, K_UNTIL).forEach { kv.put(it, null) }
+    fun clear() = listOf(K_ID, K_REFRESH, K_UNTIL, K_EMAIL).forEach { kv.put(it, null) }
 
     private fun save(id: String, refresh: String, expiresIn: Long) {
         kv.put(K_ID, id)
@@ -55,13 +71,14 @@ class CloudAuth(
 
     private fun explain(j: JsonObject, what: String): String {
         val m = (j["error"] as? JsonObject)?.get("message")?.jsonPrimitive?.content ?: "lỗi không rõ"
-        return if (m.contains("CONFIGURATION_NOT_FOUND")) "Cloud chưa bật Authentication. Trên PC chạy  npm run doctor  để xem cách sửa." else "Không $what được ($m)."
+        return if (m.contains("CONFIGURATION_NOT_FOUND")) "Firebase Authentication chưa bật Google. Làm bước 7 trong infra/README.md." else "Không $what được ($m)."
     }
 
     private companion object {
         const val K_ID = "cloud.idToken"
         const val K_REFRESH = "cloud.refreshToken"
         const val K_UNTIL = "cloud.idUntil"
+        const val K_EMAIL = "cloud.email"
     }
 }
 
@@ -76,11 +93,13 @@ class CloudClient(
 ) {
     private val docs get() = "$base/v1/projects/$projectId/databases/(default)/documents/owners/$uid"
 
+    private fun notAllowed() = AuthLost("Tài khoản ${auth.email ?: "này"} không nằm trong danh sách được phép. Thêm địa chỉ vào allowed_emails (infra/terraform.tfvars) rồi chạy terraform apply, hoặc đăng xuất và dùng tài khoản khác.")
+
     /** Null when the PC has not published anything yet. */
     suspend fun snapshot(): Snapshot? {
         val r = http.send(HttpRequest("GET", "$docs/snapshot/latest", mapOf("authorization" to "Bearer ${auth.idToken()}")))
         if (r.code == 404) return null
-        if (r.code == 401 || r.code == 403) throw AuthLost("Cloud từ chối điện thoại này. Ghép nối lại với PC.")
+        if (r.code == 401 || r.code == 403) throw notAllowed()
         if (!r.ok) throw CloudError("Cloud trả lỗi ${r.code}.")
         val fields = TrendJson.parseToJsonElement(r.body).jsonObject["fields"]?.jsonObject ?: return null
         val payload = fields["payload"]?.jsonObject?.get("stringValue")?.jsonPrimitive?.content ?: return null
@@ -101,7 +120,7 @@ class CloudClient(
         val r = http.send(HttpRequest("POST", "$docs/inbox?documentId=${e.id}", mapOf("authorization" to "Bearer ${auth.idToken()}", "content-type" to "application/json"), body))
         return when {
             r.ok || r.code == 409 -> true
-            r.code == 401 -> throw AuthLost("Cloud từ chối điện thoại này. Ghép nối lại với PC.")
+            r.code == 401 -> throw notAllowed()
             r.code == 403 -> true // rejected by the rules: retrying the same event cannot succeed, so drop it
             else -> false
         }
@@ -109,4 +128,7 @@ class CloudClient(
 }
 
 class CloudError(message: String) : Exception(message)
+
+/** The session is gone or the account is not allowed: only signing in again (or changing the allowlist) helps. */
+class AuthLost(message: String) : Exception(message)
 

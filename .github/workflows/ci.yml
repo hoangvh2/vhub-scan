@@ -66,8 +66,8 @@ jobs:
         env:
           GOOGLE_OAUTH_ACCESS_TOKEN: offline-plan-not-a-real-token
         run: |
-          terraform plan -input=false -refresh=false -lock=false -var project_id=vhub-trend-ci-000 -no-color | tee plan.txt
-          grep -q "Plan: 18 to add, 0 to change, 0 to destroy." plan.txt
+          terraform plan -input=false -refresh=false -lock=false -var project_id=vhub-trend-ci-000 -var 'allowed_emails=["ci@example.com"]' -var 'android_sha1=["AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01"]' -no-color | tee plan.txt
+          grep -q "Plan: 19 to add, 0 to change, 0 to destroy." plan.txt
       - name: Install
         run: |
           npm ci

@@ -20,6 +20,13 @@ android {
         targetSdk = 36
         versionCode = (env("VERSION_CODE") ?: "1").toInt()
         versionName = env("VERSION_NAME") ?: "0.1.0-dev"
+        // Identifiers of the Firebase project (GitHub repository variables; `terraform output android_env`). None is a secret.
+        // Blank = a build without cloud: the sign-in screen says what to configure.
+        fun quoted(v: String?) = "\"" + (v ?: "").replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        buildConfigField("String", "FIREBASE_PROJECT_ID", quoted(env("FIREBASE_PROJECT_ID")))
+        buildConfigField("String", "FIREBASE_API_KEY", quoted(env("FIREBASE_API_KEY")))
+        buildConfigField("String", "FIREBASE_WEB_CLIENT_ID", quoted(env("FIREBASE_WEB_CLIENT_ID")))
+        buildConfigField("String", "FIREBASE_OWNER_UID", quoted(env("FIREBASE_OWNER_UID") ?: "owner"))
     }
 
     signingConfigs {
@@ -49,7 +56,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     testOptions {
         unitTests.isIncludeAndroidResources = true
@@ -81,8 +91,10 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2")
-    // QR scanning through Google Play services: no camera permission, no camera code in the app.
-    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    // Google sign-in: the system account picker (Credential Manager) hands back an ID token; Firebase Auth is called over REST.
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
     testImplementation(composeBom)
     testImplementation("junit:junit:4.13.2")

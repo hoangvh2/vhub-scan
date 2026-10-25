@@ -69,15 +69,34 @@ jobs:
           SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || 'ci-throwaway' }}
           SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'throwaway' }}
           SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || 'ci-throwaway' }}
+          # Firebase project identifiers for Google sign-in (not secrets): Settings > Secrets and variables > Actions > Variables.
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          FIREBASE_WEB_CLIENT_ID: ${{ vars.FIREBASE_WEB_CLIENT_ID }}
+          FIREBASE_OWNER_UID: ${{ vars.FIREBASE_OWNER_UID }}
         run: ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
 
       - name: Verify the APK signature
+        env:
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          FIREBASE_WEB_CLIENT_ID: ${{ vars.FIREBASE_WEB_CLIENT_ID }}
         run: |
           bt="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
           apk=app/build/outputs/apk/release/app-release.apk
           "$bt/apksigner" verify --verbose --print-certs "$apk" | tee apk-signature.txt
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" apk-signature.txt
           cp "$apk" "VHubTrend-${VERSION_NAME}-${{ steps.key.outputs.kind }}.apk"
+          # Google sign-in on the phone only works for a certificate registered in Firebase (infra/README.md, step 8).
+          sha1=$(grep -m1 "certificate SHA-1 digest" apk-signature.txt | sed 's/.*: //' | sed 's/../&:/g; s/:$//' | tr a-f A-F)
+          {
+            echo "### Signing certificate SHA-1 (${{ steps.key.outputs.kind }} key)"
+            echo
+            echo "\`$sha1\`"
+            echo
+            if [ "${{ steps.key.outputs.kind }}" = release ]; then echo "Copy it into \`android_sha1\` in infra/terraform.tfvars, then run \`terraform apply\`."; else echo "This is a throwaway key: do not register it."; fi
+            if [ -z "${FIREBASE_PROJECT_ID}${FIREBASE_API_KEY}${FIREBASE_WEB_CLIENT_ID}" ]; then echo; echo "> The FIREBASE_* repository variables are not set: this APK has no cloud and shows a setup message instead of the sign-in button."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -148,5 +167,5 @@ jobs:
           files: VHubTrend-*.apk
           body: |
             Cài trên điện thoại: mở trang này bằng trình duyệt điện thoại → tải file .apk → mở file → cho phép "Cài ứng dụng không rõ nguồn gốc" nếu được hỏi.
-            Bản mới cài đè bản cũ, giữ nguyên ghép nối và dữ liệu.
+            Bản mới cài đè bản cũ, giữ nguyên đăng nhập và dữ liệu.
             Commit: ${{ github.sha }}

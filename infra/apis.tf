@@ -4,7 +4,7 @@ locals {
     "firebase.googleapis.com",
     "firestore.googleapis.com",
     "firebaserules.googleapis.com",
-    "identitytoolkit.googleapis.com", # Firebase Auth: the phone signs in with a custom token
+    "identitytoolkit.googleapis.com", # Firebase Auth: Google sign-in from the web page and the phone
     "securetoken.googleapis.com",     # Firebase Auth: refresh tokens
     "apikeys.googleapis.com",
     "firebasehosting.googleapis.com", # the web dashboard (default site, created with the Firebase project)

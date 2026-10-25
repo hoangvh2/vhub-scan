@@ -4,8 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vh.trend.core.Action
 import com.vh.trend.core.Item
-import com.vh.trend.core.PairCode
-import com.vh.trend.core.PairError
 import com.vh.trend.core.SyncState
 import com.vh.trend.core.TrendRepository
 import kotlinx.coroutines.Job
@@ -26,8 +24,8 @@ data class UiState(
     val selectedId: String? = null,
     val query: String = "",
     val notice: Notice? = null,
-    val pairing: Boolean = false,
-    val pairError: String? = null,
+    val signingIn: Boolean = false,
+    val signInError: String? = null,
 ) {
     val snapshot get() = sync.snapshot
 
@@ -57,7 +55,7 @@ class AppViewModel(private val repo: TrendRepository) : ViewModel() {
     private var noticeId = 0L
 
     fun refresh() {
-        if (refreshJob?.isActive == true || !_state.value.sync.paired) return
+        if (refreshJob?.isActive == true || !_state.value.sync.signedIn) return
         refreshJob = viewModelScope.launch {
             _state.update { it.copy(refreshing = true) }
             val s = repo.refresh()
@@ -88,23 +86,21 @@ class AppViewModel(private val repo: TrendRepository) : ViewModel() {
         }
     }
 
-    fun pair(text: String) {
-        _state.update { it.copy(pairing = true, pairError = null) }
+    /** Google's account picker has returned an ID token: turn it into a Firebase session, then load the data. */
+    fun signIn(googleIdToken: String) {
+        _state.update { it.copy(signingIn = true, signInError = null) }
         viewModelScope.launch {
-            try {
-                val warning = repo.pair(PairCode.parse(text))
-                val s = repo.refresh()
-                _state.update { UiState(sync = s, notice = warning?.let { w -> Notice(++noticeId, w) }) }
-            } catch (e: PairError) {
-                _state.update { it.copy(pairing = false, pairError = e.message) }
-            }
+            val error = repo.signIn(googleIdToken)
+            val s = if (error == null) repo.refresh() else repo.state()
+            _state.update { UiState(sync = s, signInError = error) }
         }
     }
 
-    fun pairFailed(message: String) = _state.update { it.copy(pairError = message) }
+    fun signingIn() = _state.update { it.copy(signingIn = true, signInError = null) }
+    fun signInFailed(message: String?) = _state.update { it.copy(signingIn = false, signInError = message) }
 
-    fun unpair() {
-        repo.unpair()
+    fun signOut() {
+        repo.signOut()
         _state.value = UiState(repo.state())
     }
 }

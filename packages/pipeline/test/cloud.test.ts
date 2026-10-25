@@ -3,11 +3,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { checkPhonePath } from "../src/cloud/check.js";
 import { fromTerraformOutput, parseCloudConfig, type CloudConfig } from "../src/cloud/config.js";
 import { decode, encode, FirestoreRest, type DocStore, type FsDoc, type Primitive } from "../src/cloud/firestore.js";
-import { CUSTOM_TOKEN_AUD, customToken, ServiceAccountAuth, signJwt } from "../src/cloud/google.js";
-import { lanUrls, pairCode, pairPayload, qrSvg, qrTerminal, webLink } from "../src/cloud/pair.js";
+import { ServiceAccountAuth, signJwt } from "../src/cloud/google.js";
 import { lastSync, syncOnce } from "../src/cloud/sync.js";
 import { runPipeline } from "../src/pipeline.js";
 import { buildSnapshot, snapshotHash } from "../src/snapshot.js";
@@ -59,12 +57,10 @@ async function seeded() {
 }
 
 describe("JWT signing", () => {
-  it("custom token has the claims Firebase Auth requires and verifies with the key", () => {
-    const t = parts(customToken(cloudCfg(), NOW));
+  it("signJwt output verifies with the key and carries RS256 headers", () => {
+    const t = parts(signJwt(privateKey, { a: 1 }));
     expect(t.valid).toBe(true);
     expect(t.header).toEqual({ alg: "RS256", typ: "JWT" });
-    expect(t.body).toMatchObject({ iss: cloudCfg().serviceAccount.client_email, sub: cloudCfg().serviceAccount.client_email, aud: CUSTOM_TOKEN_AUD, uid: "owner" });
-    expect(t.body.exp - t.body.iat).toBe(3600);
   });
   it("signJwt round-trips arbitrary claims", () => {
     expect(parts(signJwt(privateKey, { a: 1 })).body).toEqual({ a: 1 });
@@ -214,63 +210,6 @@ describe("cloud config", () => {
   });
   it("names every missing field", () => {
     expect(() => parseCloudConfig("{}")).toThrow("projectId, apiKey, uid, serviceAccount");
-  });
-});
-
-describe("pairing", () => {
-  it("payload carries LAN addresses, the dashboard token and a fresh custom token", () => {
-    const p = pairPayload({ lan: ["http://192.168.1.5:4173"], token: "tok", cloud: cloudCfg(), now: NOW });
-    expect(p).toMatchObject({ v: 1, lan: ["http://192.168.1.5:4173"], t: "tok", fb: { p: "vhub-trend-test", k: "AIzaTestKey0000", u: "owner" } });
-    expect(parts(p.fb!.ct).valid).toBe(true);
-    expect(pairPayload({ lan: [], token: "tok", cloud: null, now: NOW }).fb).toBeUndefined();
-    // The web link carries the Firebase part only (never the PC dashboard token), in the #fragment.
-    const link = webLink(cloudCfg(), NOW);
-    const [site, frag] = link.split("#pair=");
-    expect(site).toBe(`https://${cloudCfg().projectId}.web.app/`);
-    const body = JSON.parse(Buffer.from(frag!, "base64url").toString("utf8")) as { v: number; fb: { p: string }; t?: string; lan?: string[] };
-    expect(body.fb.p).toBe(cloudCfg().projectId);
-    expect(body.t).toBeUndefined();
-    expect(body.lan).toBeUndefined();
-    expect(webLink({ ...cloudCfg(), webUrl: "https://trend.example.com" }, NOW).startsWith("https://trend.example.com/#pair=")).toBe(true);
-  });
-  it("lists only addresses a phone can reach", () => {
-    const nets = {
-      lo: [{ address: "127.0.0.1", family: "IPv4", internal: true }],
-      wlan0: [{ address: "192.168.1.5", family: "IPv4", internal: false }, { address: "fe80::1", family: "IPv6", internal: false }],
-      x: [{ address: "169.254.3.3", family: "IPv4", internal: false }],
-    } as never;
-    expect(lanUrls(4173, nets)).toEqual(["http://192.168.1.5:4173"]);
-  });
-  it("renders a QR for the dashboard and, when it fits, for the terminal", () => {
-    const code = pairCode(pairPayload({ lan: ["http://192.168.1.5:4173"], token: "x".repeat(32), cloud: cloudCfg(), now: NOW }));
-    expect(code.length).toBeLessThan(1600);
-    expect(qrSvg(code)).toMatch(/^<svg .*<\/svg>$/);
-    expect(qrTerminal(code, 40)).toBeNull();
-    expect(qrTerminal("short", 80)).toContain("█");
-  });
-});
-
-describe("phone path check", () => {
-  const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
-  it("passes when the custom token signs in and the rules allow the read", async () => {
-    const urls: string[] = [];
-    const f = (async (url: string) => {
-      urls.push(url);
-      return url.includes("signInWithCustomToken") ? reply(200, { idToken: "id" }) : reply(200, {});
-    }) as unknown as typeof fetch;
-    const out = await checkPhonePath(cloudCfg(), NOW, f);
-    expect(out.map((o) => o.level)).toEqual(["ok", "ok"]);
-    expect(urls[1]).toBe("https://firestore.googleapis.com/v1/projects/vhub-trend-test/databases/(default)/documents/owners/owner/snapshot/latest");
-  });
-  it("tells exactly what to click when Firebase Auth was never started", async () => {
-    const f = (async () => reply(400, { error: { message: "CONFIGURATION_NOT_FOUND" } })) as unknown as typeof fetch;
-    const [c] = await checkPhonePath(cloudCfg(), NOW, f);
-    expect(c).toMatchObject({ level: "fail" });
-    expect(c!.fix).toContain("Authentication → bấm Get started");
-  });
-  it("reports rules that block the phone", async () => {
-    const f = (async (url: string) => (url.includes("signIn") ? reply(200, { idToken: "id" }) : reply(403, {}))) as unknown as typeof fetch;
-    expect((await checkPhonePath(cloudCfg(), NOW, f))[1]).toMatchObject({ level: "fail", msg: expect.stringContaining("rules") });
   });
 });
 

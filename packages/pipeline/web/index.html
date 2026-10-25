@@ -62,6 +62,13 @@ a.btn{text-decoration:none}
 .btn.keep[aria-pressed=true]{background:var(--pos-soft);border-color:var(--pos);color:var(--pos)}
 .btn.ghost{border-color:transparent;background:transparent}
 .btn.ghost:hover{background:var(--bg);border-color:var(--line)}
+.btn.danger{background:#b3261e;border-color:#b3261e;color:#fff}
+.btn.danger:hover{opacity:.9}
+dialog.confirm{border:1px solid var(--line2);border-radius:10px;background:var(--raised);color:var(--ink);padding:18px 20px;max-width:min(400px,calc(100vw - 32px))}
+dialog.confirm::backdrop{background:rgba(0,0,0,.4)}
+dialog.confirm h3{margin:0 0 6px;font-size:15px}
+dialog.confirm p{margin:0 0 14px;color:var(--ink2)}
+dialog.confirm .row{display:flex;justify-content:space-between;gap:10px}
 .btn.sm{height:28px;padding:0 9px;font-size:12.5px}
 
 .pane{min-width:0;min-height:0;display:flex;flex-direction:column}
@@ -165,10 +172,6 @@ a.btn{text-decoration:none}
 .kv dt{color:var(--mute)}.kv dd{margin:0;text-align:right}
 .alert{font-size:12.5px;border-radius:6px;padding:8px 10px;background:var(--warn-soft);color:var(--warn)}
 .alert.bad{background:color-mix(in srgb,var(--neg) 12%,transparent);color:var(--neg)}
-.qr{display:grid;grid-template-columns:minmax(0,170px) minmax(0,1fr);gap:16px;align-items:start}
-.qr .code{background:#fff;border-radius:6px;padding:6px;border:1px solid var(--line)}
-.qr .code svg{display:block;width:100%;height:auto}
-.qr ol{margin:0;padding-left:18px;font-size:14px;display:grid;gap:6px}
 
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:8px;padding:8px 8px 8px 14px;display:flex;gap:12px;align-items:center;box-shadow:var(--shadow);transition:opacity .15s,transform .15s;z-index:20;max-width:calc(100vw - 32px)}
 #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
@@ -223,8 +226,6 @@ a.btn{text-decoration:none}
   .acts .sp{display:none}
   .sys{padding:14px 16px}
   .tiles{grid-template-columns:1fr 1fr 1fr;gap:8px}.tile{padding:10px}.tile b{font-size:16px}
-  .qr{grid-template-columns:1fr}
-  .qr .code{max-width:240px}
   .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
   .tabbar button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:2px;padding:8px 0 7px;font-size:11.5px;color:var(--mute)}
   .tabbar button svg{width:20px;height:20px}
@@ -299,8 +300,10 @@ const ui = { tab: "today", items: [], sel: 0, health: null, detail: null, loadin
 const phone = matchMedia("(max-width: 820px)");
 
 // Two ways to run this page. On the PC (`npm run dashboard`) it talks to the local server with a token. Hosted on
-// Firebase Hosting (scripts/build-hosting.mjs sets VH_CLOUD) it reads the snapshot the PC published to Firestore.
-const CLOUD = window.VH_CLOUD === true;
+// Firebase Hosting (scripts/build-hosting.mjs sets VH_CLOUD = { p: project, k: API key, u: data folder, c: Google client id })
+// it signs in with Google and reads the snapshot the PC published to Firestore.
+const CFG = window.VH_CLOUD || null;
+const CLOUD = !!CFG;
 if (CLOUD) document.documentElement.classList.add("hosted");
 
 // The token arrives once in the URL (printed by `trend serve`), is kept in this browser, and removed from the address bar.
@@ -325,40 +328,61 @@ const store = {
   set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 const cloud = {
-  session: store.get("vhSession"), snap: null, snapAt: 0, ready: null,
-  /** The pairing link carries a one-hour custom token in the #fragment (never sent to a server). Exchange it once. */
-  pair() {
-    const m = /^#pair=([A-Za-z0-9_-]+)$/.exec(location.hash);
-    if (!m) return Promise.resolve();
-    history.replaceState(null, "", location.pathname + location.search);
-    return (async () => {
-      let fb;
-      try { fb = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(m[1].replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)))).fb; } catch {}
-      if (!fb || !fb.p || !fb.k || !fb.u || !fb.ct) throw new AuthError("Liên kết ghép nối bị hỏng. Tạo lại trên PC: npm run pair");
-      const r = await fetch(`${EP.auth}/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(fb.k)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: fb.ct, returnSecureToken: true }) });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new AuthError("Liên kết đã hết hạn hoặc không dùng được (" + ((j.error && j.error.message) || r.status) + "). Tạo lại trên PC: npm run pair");
-      this.session = { p: fb.p, k: fb.k, u: fb.u, refresh: j.refreshToken, id: j.idToken, until: Date.now() + (Number(j.expiresIn) || 3600) * 1000 - 60000 };
-      store.set("vhSession", this.session);
-    })();
+  session: store.get("vhSession"), snap: null, snapAt: 0,
+  gsi: null,
+  /** Google's sign-in script (Google Identity Services). Tests provide window.google themselves. */
+  loadGsi() {
+    if (!this.gsi) this.gsi = new Promise((ok, fail) => {
+      if (window.google && window.google.accounts) return ok();
+      const sc = document.createElement("script");
+      sc.src = "https://accounts.google.com/gsi/client"; sc.async = true; sc.onload = () => ok(); sc.onerror = () => { this.gsi = null; fail(new Error("Không tải được script đăng nhập của Google. Kiểm tra mạng hoặc trình chặn quảng cáo.")); };
+      document.head.append(sc);
+    });
+    return this.gsi;
   },
+  /** Draws Google's button into `el`. Its callback hands us a Google ID token, which Firebase Auth exchanges for a session. */
+  async button(el) {
+    await this.loadGsi();
+    google.accounts.id.initialize({ client_id: CFG.c, callback: (r) => this.signIn(r.credential) });
+    google.accounts.id.renderButton(el, { theme: "outline", size: "large", text: "signin_with", shape: "rectangular", locale: "vi", width: 260 });
+  },
+  async signIn(credential) {
+    try {
+      const r = await fetch(`${EP.auth}/v1/accounts:signInWithIdp?key=${encodeURIComponent(CFG.k)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ postBody: "id_token=" + encodeURIComponent(credential) + "&providerId=google.com", requestUri: location.origin, returnSecureToken: true, returnIdpCredential: true }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error("Firebase từ chối đăng nhập (" + ((j.error && j.error.message) || r.status) + "). Đã bật Google trong Firebase Authentication chưa?");
+      this.session = { email: j.email, refresh: j.refreshToken, id: j.idToken, until: Date.now() + (Number(j.expiresIn) || 3600) * 1000 - 60000 };
+      store.set("vhSession", this.session);
+      this.snap = null;
+      ui.error = null;
+    } catch (e) { ui.error = e; }
+    load();
+  },
+  /** Forgets the sign-in on this browser (the Google account itself stays signed in elsewhere). */
+  signOut() {
+    this.session = null; this.snap = null; store.set("vhSession", null); store.set("vhOverlay", null);
+    try { google.accounts.id.disableAutoSelect(); } catch {}
+    ui.items = []; ui.health = null; ui.error = new AuthError("Đã đăng xuất.");
+    renderNav(); renderStatus(); renderList();
+  },
+  lost(msg) { const e = this.session && this.session.email; this.session = null; store.set("vhSession", null); return new AuthError(msg.replace("{email}", e || "này")); },
   async idToken() {
     const s = this.session;
-    if (!s) throw new AuthError("Trình duyệt này chưa ghép nối với PC.");
+    if (!s) throw new AuthError("Đăng nhập bằng Google để xem.");
     if (s.id && Date.now() < s.until) return s.id;
-    const r = await fetch(`${EP.token}/v1/token?key=${encodeURIComponent(s.k)}`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "grant_type=refresh_token&refresh_token=" + encodeURIComponent(s.refresh) });
+    const r = await fetch(`${EP.token}/v1/token?key=${encodeURIComponent(CFG.k)}`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "grant_type=refresh_token&refresh_token=" + encodeURIComponent(s.refresh) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) { this.session = null; store.set("vhSession", null); throw new AuthError("Phiên đăng nhập đã hết hạn. Tạo lại liên kết trên PC: npm run pair"); }
+    if (!r.ok) throw this.lost("Phiên đăng nhập đã hết hạn. Đăng nhập lại.");
     this.session = { ...s, refresh: j.refresh_token || s.refresh, id: j.id_token, until: Date.now() + (Number(j.expires_in) || 3600) * 1000 - 60000 };
     store.set("vhSession", this.session);
     return this.session.id;
   },
-  docs() { return `${EP.fs}/v1/projects/${this.session.p}/databases/(default)/documents/owners/${this.session.u}`; },
+  docs() { return `${EP.fs}/v1/projects/${CFG.p}/databases/(default)/documents/owners/${CFG.u}`; },
   async fetchSnapshot() {
     const idt = await this.idToken();
     const r = await fetch(this.docs() + "/snapshot/latest", { headers: { authorization: "Bearer " + idt } });
     if (r.status === 404) throw new Error("PC chưa đẩy dữ liệu lên cloud. Trên PC chạy: npm run sync");
-    if (r.status === 401 || r.status === 403) throw new AuthError("Cloud từ chối trình duyệt này. Tạo lại liên kết trên PC: npm run pair");
+    if (r.status === 401 || r.status === 403) throw this.lost("Tài khoản {email} không nằm trong danh sách được phép. Thêm địa chỉ vào allowed_emails (infra/terraform.tfvars), chạy terraform apply, hoặc đăng nhập tài khoản khác.");
     if (!r.ok) throw new Error("Cloud trả lỗi " + r.status);
     const j = await r.json();
     const payload = j.fields && j.fields.payload && j.fields.payload.stringValue;
@@ -367,8 +391,6 @@ const cloud = {
   },
   /** Re-reads at most every 30 s; actions patch the view locally (overlay) until the PC has applied them. */
   async snapshot(force) {
-    if (!this.ready) this.ready = this.pair();
-    await this.ready;
     if (force || !this.snap || Date.now() - this.snapAt > 30000) { this.snap = await this.fetchSnapshot(); this.snapAt = Date.now(); }
     return this.snap;
   },
@@ -402,6 +424,7 @@ const cloud = {
   },
 };
 async function cloudApi(path, opt) {
+  if (!cloud.session) throw new AuthError("Đăng nhập bằng Google để xem.");
   const u = new URL(path, "http://x");
   if (opt.method === "POST") {
     if (u.pathname === "/api/feedback") { const b = JSON.parse(opt.body); await cloud.snapshot(); return cloud.send(b.id, b.action, b.days); }
@@ -411,7 +434,7 @@ async function cloudApi(path, opt) {
   const v = cloud.view(), q = (u.searchParams.get("q") || "").trim().toLowerCase();
   if (u.pathname === "/api/health") {
     const h = v.s.health, lr = h.lastRun;
-    return { lastRun: lr && { started_at: lr.startedAt, finished_at: lr.finishedAt, status: lr.status, error: lr.error, stats: lr }, tokens: { inTokens: h.tokens.used, outTokens: 0, limit: h.tokens.limit, calls: h.tokens.calls, costUsd: h.tokens.costUsd }, userStates: h.counts, digestCount: v.digest.length, cloud: { projectId: cloud.session.p, syncMinutes: null, last: { at: v.s.generatedAt, ok: true, applied: 0 } } };
+    return { lastRun: lr && { started_at: lr.startedAt, finished_at: lr.finishedAt, status: lr.status, error: lr.error, stats: lr }, tokens: { inTokens: h.tokens.used, outTokens: 0, limit: h.tokens.limit, calls: h.tokens.calls, costUsd: h.tokens.costUsd }, userStates: h.counts, digestCount: v.digest.length, cloud: { projectId: CFG.p, syncMinutes: null, last: { at: v.s.generatedAt, ok: true, applied: 0 } } };
   }
   if (u.pathname === "/api/digest") return { day: v.s.day, items: v.digest };
   if (u.pathname === "/api/entities") {
@@ -557,7 +580,7 @@ function renderList() {
   $("#app").classList.toggle("is-system", ui.tab === "system");
   if (ui.error) {
     v.replaceChildren(ui.error instanceof AuthError && CLOUD
-      ? empty("Chưa ghép nối với PC", ui.error.message + " Lệnh này in ra một liên kết; mở nó trong trình duyệt này.", h("code", {}, "npm run pair"))
+      ? signInCard(ui.error.message)
       : ui.error instanceof AuthError
       ? empty("Cần mã truy cập", "Mở lại đúng đường link mà lệnh dashboard in ra trong terminal (có đoạn ?t=...). Trình duyệt sẽ nhớ mã cho lần sau.", h("code", {}, "npm run dashboard"))
       : empty("Không tải được dữ liệu", (CLOUD ? "" : "Kiểm tra cửa sổ terminal đang chạy dashboard còn mở không. ") + ui.error.message, h("button", { class: "btn", onclick: () => load() }, "Thử lại")));
@@ -655,6 +678,24 @@ async function renderDetail() {
   } catch { /* detail stays usable without the extras */ }
 }
 
+/* ---------- sign-in (hosted mode) ---------- */
+function signInCard(message) {
+  const slot = h("div", { id: "gsi", style: "min-height:44px" });
+  cloud.button(slot).catch((e) => slot.replaceChildren(h("div", { class: "alert bad" }, e.message)));
+  return h("div", { class: "empty" }, h("h3", {}, "Đăng nhập"), h("p", {}, "Chỉ tài khoản Google nằm trong danh sách cho phép mới xem được."),
+    message && !/^Đăng nhập bằng Google/.test(message) ? h("div", { class: "alert" }, message) : null, slot);
+}
+/** Modal confirmation: cancel on the left, the destructive action on the right in red. Resolves true on confirm. */
+function confirmDialog(title, text, action) {
+  return new Promise((done) => {
+    const d = h("dialog", { class: "confirm", "aria-labelledby": "cd-t" },
+      h("h3", { id: "cd-t" }, title), h("p", {}, text),
+      h("div", { class: "row" }, h("button", { class: "btn", id: "cd-cancel", onclick: () => d.close("no") }, "Huỷ"), h("button", { class: "btn danger", id: "cd-ok", onclick: () => d.close("yes") }, action)));
+    d.addEventListener("close", () => { d.remove(); done(d.returnValue === "yes"); });
+    document.body.append(d); d.showModal(); d.querySelector("#cd-cancel").focus();
+  });
+}
+
 /* ---------- system ---------- */
 function panel(title, ...kids) { return h("section", { class: "panel" }, h("h3", {}, title), ...kids); }
 async function renderSystem(v) {
@@ -685,8 +726,13 @@ async function renderSystem(v) {
         : h("p", { class: "hint" }, "Chưa bật. Điện thoại vẫn xem được khi cùng Wi-Fi. Muốn xem cả khi ra ngoài (miễn phí): làm theo infra/README.md."),
       s.cloud && s.cloud.last && !s.cloud.last.ok ? h("div", { class: "alert bad" }, s.cloud.last.error || "Đồng bộ lỗi") : null),
   ];
-  const pairPanel = panel("Kết nối điện thoại", h("p", { class: "hint" }, "Đang tạo mã…"));
-  pairPanel.id = "pair";
+  const signOutBtn = h("button", { class: "btn sm", id: "signout", style: "justify-self:start", onclick: async () => { if (await confirmDialog("Đăng xuất khỏi trình duyệt này?", "Bạn sẽ cần đăng nhập Google lại để xem danh sách. Dữ liệu trên PC không bị xoá.", "Đăng xuất")) cloud.signOut(); } }, "Đăng xuất");
+  const pairPanel = panel("Tài khoản",
+    CLOUD ? h("p", { class: "hint" }, "Đang đăng nhập: ", h("b", {}, (cloud.session && cloud.session.email) || ""), ". Thao tác Giữ, Bỏ, Hoãn gửi về PC ở lần đồng bộ kế tiếp.")
+      : s.cloud ? h("p", { class: "hint" }, "Xem trên web và điện thoại: đăng nhập bằng Google. Ai được vào do allowed_emails trong infra/terraform.tfvars (rồi terraform apply). Dữ liệu đẩy lên cloud mỗi lần đồng bộ.")
+      : h("p", { class: "hint" }, "Cloud chưa bật nên chỉ xem được trên máy này. Bật cloud để xem trên web và điện thoại bằng tài khoản Google: infra/README.md."),
+    CLOUD ? signOutBtn : null);
+  pairPanel.id = "account";
   const bad = r && r.status === "failed";
   const tiles = h("div", { class: "tiles" },
     h("div", { class: "tile" + (bad ? " bad" : "") }, h("small", {}, "Lần quét gần nhất"), h("b", {}, r ? (r.status === "running" ? "Đang chạy…" : ago(r.started_at)) : "Chưa có"), bad ? h("small", {}, "Bị lỗi") : null),
@@ -696,22 +742,6 @@ async function renderSystem(v) {
   v.replaceChildren(h("div", { class: "sys" }, tiles, ...alerts, pairPanel,
     h("details", { class: "more" }, h("summary", {}, "Chi tiết kỹ thuật"), h("div", { class: "grid" }, ...panels))));
   renderDetail();
-  if (CLOUD) { pairPanel.replaceChildren(h("h3", {}, "Kết nối điện thoại"), h("p", { class: "hint" }, "Ghép nối điện thoại làm trên PC: chạy npm run pair rồi quét mã QR bằng app.")); return; }
-  try {
-    const p = await api("/api/pair");
-    const svg = new DOMParser().parseFromString(p.svg, "image/svg+xml").documentElement;
-    const steps = h("ol", {},
-      h("li", {}, "Cài app VHub Trend (APK ở mục Releases của repo)."),
-      h("li", {}, "Mở app, bấm Quét mã QR rồi hướng camera vào mã bên cạnh."),
-      p.cloud ? h("li", {}, "Xong. App đọc dữ liệu từ cloud, ở đâu cũng xem được.") : null);
-    pairPanel.replaceChildren(...[h("h3", {}, "Kết nối điện thoại"),
-      p.lanReachable || p.cloud ? null : h("div", { class: "alert" }, "Dashboard chưa mở cho điện thoại. Chạy lại: npm run dashboard -- --lan"),
-      h("div", { class: "qr" }, h("div", { class: "code" }, document.importNode(svg, true)), h("div", { style: "display:grid;gap:8px" }, steps,
-        h("p", { class: "hint" }, `Mã hết hạn lúc ${new Date(p.expiresAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}. Đừng chia sẻ mã này.`),
-        h("div", {}, h("button", { class: "btn sm", onclick: async () => { try { await navigator.clipboard.writeText(p.code); toast("Đã chép mã. Dán vào app nếu không quét được."); } catch { toast("Trình duyệt không cho chép; dùng npm run pair."); } } }, "Chép mã dạng chữ"), p.webLink && h("button", { class: "btn sm", style: "margin-left:8px", onclick: async () => { try { await navigator.clipboard.writeText(p.webLink); toast("Đã chép liên kết. Mở nó trong trình duyệt muốn dùng (hết hạn sau 1 giờ)."); } catch { toast("Trình duyệt không cho chép; dùng npm run pair."); } } }, "Chép liên kết mở web"))))].filter(Boolean));
-  } catch (e) {
-    pairPanel.replaceChildren(h("h3", {}, "Kết nối điện thoại"), h("p", { class: "hint" }, "Phiên bản dashboard này chưa tạo được mã ghép nối. Chạy npm run pair trong terminal."));
-  }
 }
 
 /* ---------- data ---------- */

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "screens": "node ui/screens.mjs",
-    "test": "firebase emulators:exec --config ../firebase/firebase.json --only firestore,auth --project demo-vhub-trend \"vitest run\""
+    "test": "ALLOWED_EMAILS=me@example.com,wife@example.org node ../firebase/gen-rules.mjs && firebase emulators:exec --config ../firebase/firebase.json --only firestore,auth --project demo-vhub-trend \"vitest run\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^6.0.0",

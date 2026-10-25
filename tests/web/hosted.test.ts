@@ -1,21 +1,24 @@
 // The hosted dashboard (Firebase Hosting build of web/index.html) in a real browser against the Firebase emulators:
-// pair from the link, read the PC's snapshot, act, and see the action reach the PC on its next sync.
+// sign in with Google (Google's script is replaced by a stub that hands over a fake ID token, which the Auth emulator
+// accepts), read the PC's snapshot, act, and see the action reach the PC on its next sync.
 // Set HOSTED_SHOTS=<dir> to also save screenshots.
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { generateKeyPairSync } from "node:crypto";
 import { mkdirSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { join, resolve } from "node:path";
-import { chromium, devices, type Browser } from "playwright";
+import { chromium, devices, type Browser, type Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CloudConfig } from "../../packages/pipeline/src/cloud/config.js";
 import { FirestoreRest } from "../../packages/pipeline/src/cloud/firestore.js";
 import { ServiceAccountAuth } from "../../packages/pipeline/src/cloud/google.js";
-import { webLink } from "../../packages/pipeline/src/cloud/pair.js";
 import { syncOnce } from "../../packages/pipeline/src/cloud/sync.js";
 import { runPipeline } from "../../packages/pipeline/src/pipeline.js";
 import { rig } from "../../packages/pipeline/test/helpers.js";
 import { cfg, world } from "../../packages/pipeline/test/world.js";
+import { fakeGoogleToken } from "../helpers/google.js";
 
 const PROJECT = "demo-vhub-trend";
 const FS = "http://127.0.0.1:8080";
@@ -33,7 +36,9 @@ const problems: string[] = [];
 
 beforeAll(async () => {
   await fetch(`${FS}/emulator/v1/projects/${PROJECT}/databases/(default)/documents`, { method: "DELETE" });
-  execFileSync("node", ["packages/pipeline/scripts/build-hosting.mjs"], { cwd: root });
+  const home = mkdtempSync(join(tmpdir(), "vhub-home-"));
+  writeFileSync(join(home, "cloud.json"), JSON.stringify({ projectId: PROJECT, apiKey: cloud.apiKey, uid: "owner", webClientId: "1234-test.apps.googleusercontent.com" }));
+  execFileSync("node", ["packages/pipeline/scripts/build-hosting.mjs"], { cwd: root, env: { ...process.env, VHUB_TREND_HOME: home } });
   const html = readFileSync(join(root, "firebase/public/index.html"));
   server = createServer((_, res) => res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(html));
   await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok));
@@ -45,9 +50,20 @@ afterAll(async () => {
   server?.close();
 });
 
+/** Clicks Google's button as this person. */
+async function signInAs(page: Page, email: string) {
+  await page.evaluate((t) => { (window as unknown as { __cred: string }).__cred = t; }, fakeGoogleToken(email));
+  await page.click("#fake-google");
+}
+
 async function open(opts = {}) {
   const ctx = await browser.newContext(opts);
-  await ctx.addInitScript(`window.VH_ENDPOINTS = { auth: "${AUTH}/identitytoolkit.googleapis.com", token: "${AUTH}/securetoken.googleapis.com", fs: "${FS}" };`);
+  await ctx.addInitScript(`window.VH_ENDPOINTS = { auth: "${AUTH}/identitytoolkit.googleapis.com", token: "${AUTH}/securetoken.googleapis.com", fs: "${FS}" };
+    window.google = { accounts: { id: {
+      initialize(o) { window.__gsi = o; },
+      renderButton(el) { el.innerHTML = '<button id="fake-google">Đăng nhập với Google</button>'; el.firstChild.onclick = () => window.__gsi.callback({ credential: window.__cred }); },
+      disableAutoSelect() {},
+    } } };`);
   const page = await ctx.newPage();
   page.on("console", (m) => m.type() === "error" && problems.push(m.text()));
   page.on("pageerror", (e) => problems.push(e.message));
@@ -55,65 +71,77 @@ async function open(opts = {}) {
 }
 
 describe("hosted dashboard", () => {
-  it("pairs from the link, shows the PC's snapshot, and an action reaches the PC", async () => {
+  it("signs in with Google, shows the PC's snapshot, an action reaches the PC, and sign-out asks first", async () => {
     const r = rig({ cfg: cfg(), ...world() });
     await runPipeline(r.deps);
     const auth = new ServiceAccountAuth(cloud);
     const docs = new FirestoreRest({ projectId: PROJECT, token: () => auth.token(), baseUrl: FS });
     const sync = () => syncOnce({ db: r.db, store: r.store, budget: r.deps.budget, docs, uid: "owner", clock: r.clock });
     expect(await sync()).toMatchObject({ ok: true, pushed: true });
+    const shots = process.env.HOSTED_SHOTS;
+    if (shots) mkdirSync(shots, { recursive: true });
 
-    const link = webLink(cloud, new Date()).replace("https://demo-vhub-trend.web.app", base);
     const { ctx, page } = await open({ viewport: { width: 1440, height: 900 } });
-    await page.goto(link);
+    await page.goto(base);
+    await page.waitForSelector("#fake-google");
+    expect(await page.locator(".rowi").count()).toBe(0);
+    if (shots) await page.screenshot({ path: join(shots, "hosted-signin.png") });
+
+    // Not on the allowlist: Firestore refuses, the page says whose account it was and offers the button again.
+    await signInAs(page, "mallory@example.com");
+    await page.waitForFunction(() => document.body.innerText.includes("mallory@example.com") && document.body.innerText.includes("allowed_emails"));
+    await page.waitForSelector("#fake-google");
+    expect(await page.locator(".rowi").count()).toBe(0);
+    expect(await page.evaluate(() => localStorage.getItem("vhSession"))).toBeNull();
+    if (shots) await page.screenshot({ path: join(shots, "hosted-refused.png") });
+
+    await signInAs(page, "me@example.com");
     await page.waitForSelector(".rowi");
-    expect(page.url()).toBe(base + "/"); // the token is gone from the address bar
     const rows = await page.locator(".rowi").count();
     expect(rows).toBeGreaterThan(0);
-    const shots = process.env.HOSTED_SHOTS;
-    if (shots) { mkdirSync(shots, { recursive: true }); await page.screenshot({ path: join(shots, "hosted-today.png") }); }
+    if (shots) await page.screenshot({ path: join(shots, "hosted-today.png") });
 
     const title = (await page.locator(".rowi >> nth=0").innerText()).split("\n")[0]!;
     await page.keyboard.press("e"); // Keep
     await page.waitForSelector("#toast.on");
-    const pending = await docs.list("owners/owner/inbox");
-    expect(pending).toHaveLength(1);
+    expect(await docs.list("owners/owner/inbox")).toHaveLength(1);
 
-    // The PC applies it on its next sync; the page keeps showing the action meanwhile and afterwards.
+    // The PC applies it on its next sync; the page shows the action meanwhile and afterwards.
     expect(await sync()).toMatchObject({ ok: true, applied: 1 });
     await page.keyboard.press("2");
     await page.waitForSelector(".rowi");
     expect(await page.locator(".rowi").first().innerText()).toContain(title);
     if (shots) await page.screenshot({ path: join(shots, "hosted-kept.png") });
 
-    // Reload: the session survives (refresh token), no link needed.
+    // Reload: the session survives (refresh token), no sign-in needed.
     await page.goto(base);
     await page.waitForSelector(".rowi");
     await page.keyboard.press("4");
-    await page.waitForSelector(".tile");
+    await page.waitForSelector("#signout");
+    expect(await page.locator("body").innerText()).toContain("me@example.com");
     if (shots) await page.screenshot({ path: join(shots, "hosted-system.png") });
+
+    // Sign-out: "Huỷ" keeps the session, "Đăng xuất" ends it.
+    await page.click("#signout");
+    await page.waitForSelector("dialog[open]");
+    if (shots) await page.screenshot({ path: join(shots, "hosted-signout-dialog.png") });
+    await page.click("#cd-cancel");
+    await page.waitForSelector("dialog", { state: "detached" });
+    expect(await page.evaluate(() => localStorage.getItem("vhSession"))).not.toBeNull();
+    await page.click("#signout");
+    await page.click("#cd-ok");
+    await page.waitForSelector("#fake-google");
+    expect(await page.evaluate(() => localStorage.getItem("vhSession"))).toBeNull();
     await ctx.close();
 
     const phone = await open({ ...devices["Pixel 7"] });
-    await phone.page.goto(link.replace(/#pair=.*/, "") + "#pair=" + link.split("#pair=")[1]);
+    await phone.page.goto(base);
+    await phone.page.waitForSelector("#fake-google");
+    await signInAs(phone.page, "WIFE@example.org"); // letter case does not matter
     await phone.page.waitForSelector(".rowi");
     if (shots) await phone.page.screenshot({ path: join(shots, "hosted-phone.png") });
     expect(await phone.page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
     await phone.ctx.close();
-  });
-
-  it("an unpaired browser is told how to pair, and a broken link does not crash", async () => {
-    const a = await open();
-    await a.page.goto(base);
-    await a.page.waitForSelector(".empty, .rowi");
-    expect(await a.page.locator("body").innerText()).toContain("npm run pair");
-    await a.ctx.close();
-
-    const b = await open();
-    await b.page.goto(base + "/#pair=not-a-link");
-    await b.page.waitForSelector(".empty");
-    expect(await b.page.locator("body").innerText()).toContain("npm run pair");
-    await b.ctx.close();
     expect(problems.filter((p) => !/Failed to load resource/.test(p))).toEqual([]);
   });
 });

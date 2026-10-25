@@ -14,24 +14,6 @@ export function signJwt(privateKeyPem: string, claims: Record<string, unknown>):
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SCOPE = "https://www.googleapis.com/auth/datastore";
-export const CUSTOM_TOKEN_AUD = "https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit";
-
-/**
- * Firebase custom token for the phone (valid 1 hour, used once at pairing; afterwards the phone keeps
- * its own refresh token). Signed locally with the PC's service-account key.
- */
-export function customToken(c: CloudConfig, now: Date): string {
-  const iat = Math.floor(now.getTime() / 1000);
-  return signJwt(c.serviceAccount.private_key, {
-    iss: c.serviceAccount.client_email,
-    sub: c.serviceAccount.client_email,
-    aud: CUSTOM_TOKEN_AUD,
-    iat,
-    exp: iat + 3600,
-    uid: c.uid,
-  });
-}
-
 /** OAuth access token for Firestore from the service-account key (JWT bearer grant), cached until shortly before expiry. */
 export class ServiceAccountAuth {
   private cached: { token: string; until: number } | null = null;

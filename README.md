@@ -12,9 +12,9 @@ It does **not** touch Facebook. Facebook is where you find people; this finds th
 | Claude CLI adapter | Verified against the real `claude` CLI 2.1.310 (see `docs/DESIGN.md`, "Measured") |
 | GitHub and Hacker News connectors | Built and tested against recorded-shape fixtures. GitHub: one live run from the build sandbox on 2026-10-24 (no token, 89 items collected, 5 in the digest). Hacker News: **not yet run live** (the sandbox blocks it); first live run is yours (`npm run scan`) |
 | Local web dashboard (`npm run dashboard`) | Built, API tested; rendered in headless Chromium at desktop, tablet and phone sizes, light and dark (CI artifact `dashboard-screens`). Not checked on Safari/iOS |
-| Hosted web dashboard (Firebase Hosting, same page reading Firestore; `npm run web:deploy`) | Built. Tested in headless Chromium against the Firebase emulators (pair from link, read snapshot, act, PC applies). **Not deployed to a real project yet; real Firestore CORS from a `web.app` origin unverified** |
-| Android app (Compose, LAN + Firestore, offline queue), APK signed in CI | Built (MVP). Core and UI tested in CI (JVM + Robolectric screenshots), release APK signature verified with `apksigner`. **Not yet installed on a real phone.** Guide: [`android/README.md`](android/README.md) |
-| Cloud sync for the phone: Terraform (Firebase Spark, free), Firestore rules, PC sync, pairing code | Built. `terraform plan` without credentials, rules and PC↔phone sync tested in CI against the Firebase emulators. **Not yet applied to a real Google project** (your first `terraform apply`). Guide: [`infra/README.md`](infra/README.md), design: [`docs/SYNC.md`](docs/SYNC.md) |
+| Hosted web dashboard (Firebase Hosting, same page reading Firestore, Google sign-in + email allowlist; `npm run web:deploy`) | Built. Tested in headless Chromium against the Firebase emulators (sign-in with a stubbed Google button, allowlist refusal, read snapshot, act, PC applies, sign-out confirm). **Not deployed to a real project; real Google sign-in and real Firestore CORS from a `web.app` origin unverified** |
+| Android app (Compose, Google sign-in via Credential Manager, Firestore REST, offline queue), APK signed in CI | Built (MVP). Core and UI tested in CI (JVM + Robolectric screenshots), release APK signature verified with `apksigner`. **Not yet installed on a real phone; real Google account picker untried.** Guide: [`android/README.md`](android/README.md) |
+| Cloud sync for web and phone: Terraform (Firebase Spark, free), Firestore rules with an email allowlist, PC sync | Built. `terraform plan` without credentials, rules (allowlist cases) and PC↔web/phone sync tested in CI against the Firebase emulators. **Not yet applied to a real Google project** (your first `terraform apply`). Guide: [`infra/README.md`](infra/README.md), design: [`docs/SYNC.md`](docs/SYNC.md) |
 | Scheduling on Windows | Command printed by `trend schedule`; **not verified on a real Windows PC** |
 
 ## Bắt đầu nhanh (lần đầu, khoảng 10 phút)
@@ -33,13 +33,13 @@ Mọi lệnh dưới đây chạy trong thư mục repo này.
 | 6 | `npm run scan` | Một lần quét đầy đủ (vài phút) |
 | 7 | `npm run dashboard` | In link `http://localhost:4173/?t=<token>`, mở link đó trong trình duyệt |
 
-Xem trên điện thoại: bật cloud miễn phí một lần theo [`infra/README.md`](infra/README.md) (khoảng 15 phút), rồi `npm run pair` và quét mã trong app; ở đâu cũng xem được, không cần mở dashboard. Chưa bật cloud thì dùng `npm run dashboard -- --lan` để xem khi cùng Wi-Fi.
+Xem trên web và điện thoại: bật cloud miễn phí một lần theo [`infra/README.md`](infra/README.md) (khoảng 25 phút), rồi đăng nhập bằng tài khoản Google nằm trong `allowed_emails`; ở đâu cũng xem được, không cần mở dashboard, không có mã QR. Chưa bật cloud thì chỉ xem được trên PC.
 
 Hằng ngày: `npm run scan` (hoặc `npm run schedule` để in lệnh đặt lịch tự chạy), `npm run status` để xem lần chạy gần nhất. Các lệnh khác: `npm run trend -- help`.
 
 Trong `config.json`, các khoá bắt đầu bằng `_` (ví dụ `_huong_dan`) chỉ là ghi chú, chương trình bỏ qua. Mục nào không có trong file thì dùng giá trị mặc định trong `packages/pipeline/src/config.ts`. Gõ sai tên khoá sẽ bị báo lỗi, không bị lờ đi.
 
-`npm run trend -- serve --lan` lets your phone open the dashboard over your home network. Anyone on the network with the link can read and change your list; the token in the link is the only protection.
+`npm run trend -- serve --lan` lets another device on your network open the PC dashboard. Anyone on the network with the link can read and change your list; the token in the link is the only protection.
 
 ## What stays where
 

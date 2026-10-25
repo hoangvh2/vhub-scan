@@ -19,3 +19,4 @@ data/
 crash.log
 # built by npm run web:build
 firebase/public/
+firebase/firestore.rules

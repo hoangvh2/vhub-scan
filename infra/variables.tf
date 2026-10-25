@@ -20,7 +20,7 @@ variable "firestore_location" {
 }
 
 variable "owner_uid" {
-  description = "Firebase Auth uid the phone signs in as (via a custom token minted by the PC). Must match the PC (cloud.json) and firebase/firestore.rules uses it only through the request path."
+  description = "Name of the Firestore folder (owners/<owner_uid>) the PC writes to and the web and phone read from. Not a login. Must match cloud.json; leave the default unless you know why."
   type        = string
   default     = "owner"
   validation {
@@ -33,4 +33,33 @@ variable "create_pc_key" {
   description = "Create the PC's service-account key here so `npm run cloud:connect` can pick it up. The key is then also in terraform.tfstate on this PC (never commit it). Set false if your organisation forbids keys, then follow README section 'Không tạo được key'."
   type        = bool
   default     = true
+}
+
+variable "allowed_emails" {
+  description = "Google accounts allowed to sign in to the web dashboard and the Android app (and nobody else). Compared case-insensitively; the account must have a verified address. Goes into the Firestore rules; keep it in terraform.tfvars, which is not committed."
+  type        = list(string)
+  validation {
+    condition     = length(var.allowed_emails) > 0 && alltrue([for e in var.allowed_emails : can(regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+$", e))])
+    error_message = "allowed_emails needs at least one valid address, e.g. [\"you@gmail.com\"]."
+  }
+}
+
+variable "android_sha1" {
+  description = "Optional. SHA-1 fingerprint(s) of the certificate that signs the Android APK (the CI job summary prints it). Registers the app with Firebase so Google sign-in works on the phone."
+  type        = list(string)
+  default     = []
+  validation {
+    condition     = alltrue([for h in var.android_sha1 : can(regex("^([0-9A-Fa-f]{2}:?){19}[0-9A-Fa-f]{2}$", h))])
+    error_message = "Each android_sha1 entry is a SHA-1 fingerprint like AB:CD:...:EF (20 bytes)."
+  }
+}
+
+variable "web_client_id" {
+  description = "Optional until step 7 of infra/README.md: the Client ID of the OAuth client \"Web client (auto created by Google Service)\", copied from Firebase console > Authentication > Google. Only echoed in outputs for the dashboard build and the APK build."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.web_client_id == "" || can(regex("^[0-9]+-[a-z0-9]+\\.apps\\.googleusercontent\\.com$", var.web_client_id))
+    error_message = "web_client_id looks like 1234567890-abc123.apps.googleusercontent.com."
+  }
 }
