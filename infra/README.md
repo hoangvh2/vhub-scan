@@ -135,7 +135,7 @@ Chi phí: Cloud Functions, Cloud Build, Storage nằm trong hạn mức miễn p
    ```
    Không muốn để key trong file: bỏ dòng `gemini_api_key` và chạy `TF_VAR_gemini_api_key=AIza... terraform apply`. Cần Terraform ≥ 1.11.
 4. Ở thư mục gốc repo: `npm run cloud:function` (đóng gói code function vào `infra/build/`, không commit).
-5. `cd infra && terraform apply`. Lần đầu mất khoảng 3–5 phút (bật API, build function).
+5. `cd infra && terraform init && terraform apply`. Lần đầu mất khoảng 3–5 phút (bật API, build function).
 6. `cd .. && npm run cloud:connect` (để PC biết bucket), rồi `npm run sync`: PC gửi database và config lên bucket. Từ đây mỗi lần sync PC lấy kết quả quét trên cloud về trước, rồi mới gửi bản của mình lên.
 7. Web hoặc app → tab **Hệ thống** → **Quét bằng Gemini**. Kết quả (token, chi phí, số mục) hiện trong danh sách lần quét.
 
@@ -170,7 +170,8 @@ Chi phí: Cloud Functions, Cloud Build, Storage nằm trong hạn mức miễn p
 | Nút Google không hiện, hoặc cửa sổ Google báo `origin_mismatch` | Thiếu địa chỉ web trong **Authorized JavaScript origins** (Bước 6, mục 4); đợi vài phút |
 | "Tài khoản … không nằm trong danh sách được phép" | Thêm địa chỉ vào `allowed_emails`, `terraform apply`; hoặc đăng nhập tài khoản khác |
 | Web/app: "PC chưa đẩy dữ liệu lên cloud" | Trên PC chạy `npm run sync` |
-| `Error 403 ... eventarc` / `Cloud Build ... permission` khi apply Bước 10 | Quyền vừa cấp cần vài phút để có hiệu lực; chạy lại `terraform apply` |
+| `Permission denied while using the Eventarc Service Agent`, `Error 403 ... eventarc` hoặc `Cloud Build ... permission` khi apply Bước 10 | Terraform đã tự đợi 90 giây sau khi cấp quyền, nhưng Google đôi khi cần lâu hơn: đợi vài phút rồi chạy lại `terraform apply` |
+| `Inconsistent dependency lock file` | Vừa cập nhật repo có thêm provider: chạy `terraform init` rồi apply lại |
 | `Billing account ... not found` / `requires billing` khi apply Bước 10 | Chưa lên gói Blaze (Bước 10, mục 1) |
 | Lần quét báo "PC chưa gửi dữ liệu lên cloud" | Chạy `npm run cloud:connect` rồi `npm run sync` trên PC (Bước 10, mục 6) |
 | Lần quét báo "PC vừa cập nhật dữ liệu trong lúc quét" | PC sync đúng lúc cloud đang quét; kết quả cloud bị bỏ để không ghi đè. Bấm quét lại (vẫn tính một lượt) |
@@ -194,5 +195,5 @@ Firestore được bảo vệ chống xoá nhầm, nên `terraform destroy` sẽ
 | Màn hình Android (đăng nhập, bị từ chối, chưa cấu hình, đăng xuất có xác nhận) | Robolectric trong CI. **Chưa cài trên điện thoại thật; chưa thử hộp chọn tài khoản Google thật** |
 | Quét bằng Gemini: giới hạn lượt/ngày trong rules, nút trên web tạo yêu cầu và function chạy pipeline trên bản sao database, hai lượt rồi "Hết lượt" | Rules + web trên emulator (Chromium thật), function chạy với LLM giả. **Chưa gọi Gemini thật, chưa deploy Cloud Function thật** |
 | Trao database PC ↔ bucket (không mất thao tác của PC, không ghi đè khi hai bên cùng ghi) | Test với bucket giả có kiểm tra generation như GCS |
-| `terraform plan` với `cloud_scan = true` (44 resource, key không xuất hiện trong plan) | CI |
+| `terraform plan` với `cloud_scan = true` (47 resource, key không xuất hiện trong plan) | CI |
 | `terraform apply` trên project Google thật, bật Google ở Firebase, SHA-1 | **Chưa chạy** (không có tài khoản Google trong môi trường build). Lần đầu là của bạn |
