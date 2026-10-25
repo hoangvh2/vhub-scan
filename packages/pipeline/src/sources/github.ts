@@ -84,6 +84,17 @@ export class GitHubSource {
     return out;
   }
 
+  /** One search, for the settings page's "Thử" button: how many repos match now, and the top few. */
+  async trySearch(q: string, now: Date, top = 5): Promise<{ total: number; items: { name: string; stars: number; description: string }[] }> {
+    const res = await this.get<{ total_count: number; items: Repo[] }>(
+      `/search/repositories?q=${encodeURIComponent(expandQuery(q, now))}&sort=stars&order=desc&per_page=${Math.max(1, Math.min(10, top))}`,
+    );
+    return {
+      total: res?.total_count ?? 0,
+      items: (res?.items ?? []).map((r) => ({ name: r.full_name, stars: r.stargazers_count, description: (r.description ?? "").slice(0, 140) })),
+    };
+  }
+
   /** One repo, used to fill in a GitHub link found elsewhere (for example a Show HN post). */
   async repo(fullName: string): Promise<RawItem | null> {
     const r = await this.get<Repo>(`/repos/${fullName}`, true);

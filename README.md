@@ -37,6 +37,19 @@ Xem trên web và điện thoại: bật cloud miễn phí một lần theo [`in
 
 Hằng ngày: `npm run scan` (hoặc `npm run schedule` để in lệnh đặt lịch tự chạy), `npm run status` để xem lần chạy gần nhất. Các lệnh khác: `npm run trend -- help`.
 
+### Cài đặt và chủ đề tìm kiếm
+
+Mọi cài đặt nằm ở trang **Cài đặt** của dashboard (phím `5`): mỗi mục có giải thích, giá trị mặc định, giới hạn, và ước tính số lượt tìm GitHub, số lần gọi AI, số token mỗi lần quét trước khi lưu. Lưu là ghi `~/.vhub-trend/config.json` và giữ bản sao lưu; mục Lịch sử hoàn tác được từng lần lưu. Có cloud thì sửa được cả trên web và app Android (PC nhận khi đang chạy, xem [`docs/SYNC.md`](docs/SYNC.md)).
+
+Thêm một chủ đề tìm kiếm mới (ví dụ "Tài chính cá nhân"):
+
+1. Cài đặt → Quét cái gì → **Thêm chủ đề**, đặt tên.
+2. Nhập query GitHub, mỗi dòng một query, ví dụ `topic:personal-finance created:>{d14} stars:>=5` (`{d14}` = ngày cách đây 14 ngày). Trên PC bấm **Thử trên GitHub** để xem query ra bao nhiêu repo.
+3. Thêm vài từ khoá ưu tiên (`budget, expense`): ý có từ này được cộng điểm trước khi đưa cho AI.
+4. Lưu. Lần quét sau pipeline tìm theo chủ đề mới, Claude xếp mỗi ý vào một chủ đề, và Khám phá lọc được theo chủ đề.
+
+Đổi luật lọc (từ loại trừ, tài khoản bị chặn, độ dài mô tả) thì lần quét sau áp dụng lại cho cả ý đã thu thập: ý mới bị loại sẽ ẩn, ý trước đây bị loại nay hợp lệ sẽ quay lại.
+
 Trong `config.json`, các khoá bắt đầu bằng `_` (ví dụ `_huong_dan`) chỉ là ghi chú, chương trình bỏ qua. Mục nào không có trong file thì dùng giá trị mặc định trong `packages/pipeline/src/config.ts`. Gõ sai tên khoá sẽ bị báo lỗi, không bị lờ đi.
 
 `npm run trend -- serve --lan` lets another device on your network open the PC dashboard. Anyone on the network with the link can read and change your list; the token in the link is the only protection.

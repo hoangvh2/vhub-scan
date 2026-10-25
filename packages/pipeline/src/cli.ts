@@ -3,14 +3,15 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildCloud, buildDeps, ensureToken, loadHomeConfig, resolveHome, type Cloud } from "./app.js";
+import { buildCloud, buildDeps, ensureToken, loadHomeConfig, resolveHome, settingsStore, type Cloud } from "./app.js";
 import { fromTerraformOutput, writeCloudConfig } from "./cloud/config.js";
-import { lastSync } from "./cloud/sync.js";
-import { defaultConfig, type Config } from "./config.js";
+import { lastRemoteSettings, lastSync } from "./cloud/sync.js";
+import { defaultConfig, githubSettings, type Config } from "./config.js";
 import { ClaudeCliAdapter } from "./llm/claudeCli.js";
 import { USER_ACTIONS, systemClock, type UserAction } from "./model.js";
 import { runPipeline } from "./pipeline.js";
 import { createApp } from "./server.js";
+import { GitHubSource } from "./sources/github.js";
 import { checkConfig, checkGithubToken, initGuide, probeCommand, runSummary } from "./setup.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -165,12 +166,15 @@ async function main(): Promise<number> {
         console.error(`Sửa trong ${home.configFile}, rồi chạy:  npm run doctor`);
         return 1;
       }
-      const { deps, db, store, budget } = buildDeps(home, cfg);
+      let { deps, db, store, budget } = buildDeps(home, cfg);
       try {
+        const cloud = buildCloud(home, { db, store, budget, log: (m) => console.log(m) });
+        // Settings changed on the phone since the last sync take effect in this run.
+        const pulled = cloud ? await cloud.pullSettings().catch((e: unknown) => (console.log(`cloud: chưa lấy được cài đặt từ điện thoại (${e instanceof Error ? e.message : e})`), 0)) : 0;
+        if (pulled) ({ deps, store, budget } = buildDeps(home, loadHomeConfig(home), { db }));
         const st = await runPipeline(deps);
         if (flags.get("json")) console.log(JSON.stringify(st, null, 2));
         else console.log(runSummary(st));
-        const cloud = buildCloud(home, { db, store, budget, log: (m) => console.log(m) });
         const synced = cloud ? await cloud.sync() : null;
         return st.sourceErrors.length || st.degraded.length || (synced && !synced.ok) ? 2 : 0;
       } finally {
@@ -179,7 +183,7 @@ async function main(): Promise<number> {
     }
     case "serve": {
       const cfg = loadHomeConfig(home);
-      const { deps, store, db, budget } = buildDeps(home, cfg);
+      const { store, db, budget } = buildDeps(home, cfg);
       const token = ensureToken(home);
       let running = false;
       const port = Number(flags.get("port") ?? cfg.server.port);
@@ -191,14 +195,22 @@ async function main(): Promise<number> {
         syncing = true;
         await cloud.sync().finally(() => (syncing = false));
       };
+      const settings = settingsStore(home);
       const app = createApp({
-        db, store, budget, token,
+        db, store, budget, token, settings,
         runNow: async () => {
           if (running) return { started: false, reason: "already running" };
           running = true;
-          void runPipeline(deps).catch(() => undefined).then(sync).finally(() => (running = false));
+          // Each run reads config.json again, so changes from the settings page apply without restarting the dashboard.
+          const run = async () => {
+            if (cloud) await cloud.pullSettings().catch(() => 0);
+            await runPipeline(buildDeps(home, loadHomeConfig(home), { db }).deps);
+          };
+          void run().catch(() => undefined).then(sync).finally(() => (running = false));
           return { started: true };
         },
+        testQuery: (q) => new GitHubSource({ cfg: githubSettings(settings.load()), token: process.env.GITHUB_TOKEN || undefined }).trySearch(q, new Date()),
+        remoteSettings: () => lastRemoteSettings(db),
         extraHealth: () => ({ cloud: cloud ? { projectId: cloud.cfg.projectId, syncMinutes: cloud.cfg.syncMinutes, last: lastSync(db) } : null, lan: host === "0.0.0.0" }),
       });
       if (cloud) {

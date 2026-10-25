@@ -1,13 +1,21 @@
-import type { Config } from "./config.js";
+import { categories, type Config } from "./config.js";
 import type { EntityRow } from "./model.js";
 import { clip } from "./text.js";
 
-export const TRIAGE_VERSION = "triage-1";
+export const TRIAGE_VERSION = "triage-2";
 export const CARD_VERSION = "card-1";
 
-export const CATEGORIES = ["work-tool", "life-tool", "dev-tool", "ai-agent", "automation", "other"] as const;
+/** Categories of triage-1 (before topics); still stored on older items, so the dashboards keep a label for them. */
+export const LEGACY_CATEGORIES: Record<string, string> = {
+  "work-tool": "Công việc",
+  "life-tool": "Đời sống",
+  "dev-tool": "Công cụ lập trình",
+  "ai-agent": "AI agent",
+  automation: "Tự động hoá",
+};
 
-export const triageSchema = {
+/** The triage answer's shape. The category list follows the enabled topics, so it is built per config. */
+export const triageSchema = (cfg: Config) => ({
   type: "object",
   properties: {
     items: {
@@ -17,7 +25,7 @@ export const triageSchema = {
         properties: {
           id: { type: "string" },
           s: { type: "integer", minimum: 0, maximum: 3 },
-          c: { type: "string", enum: [...CATEGORIES] },
+          c: { type: "string", enum: categories(cfg).map((c) => c.id) },
           w: { type: "string", maxLength: 90 },
         },
         required: ["id", "s", "c", "w"],
@@ -25,7 +33,7 @@ export const triageSchema = {
     },
   },
   required: ["items"],
-};
+});
 
 export const cardSchema = {
   type: "object",
@@ -63,7 +71,7 @@ export function triageSystem(cfg: Config): string {
     "You triage software projects for one person who vibe-codes small tools. Reply with JSON only.",
     `Scope: ${cfg.scope.focus}`,
     "Score s: 3 = clearly useful and easy to adapt, 2 = promising, 1 = marginal, 0 = off-topic or too complex. Be strict; most items deserve 0 or 1.",
-    "c = category. w = reason in Vietnamese, at most 12 words.",
+    `c = category id, one of: ${categories(cfg).map((c) => `${c.id} (${c.label})`).join(", ")}. w = reason in Vietnamese, at most 12 words.`,
     "Input lines: id|name|description|topics|stars|gain per day|sources.",
   ].join("\n");
 }

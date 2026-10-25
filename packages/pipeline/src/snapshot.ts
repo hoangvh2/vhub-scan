@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Db } from "./db.js";
 import type { Budget } from "./llm/budget.js";
 import type { UserState } from "./model.js";
+import type { SettingsView } from "./settings.js";
 import type { Store } from "./store.js";
 import { digestFor, listEntities, type EntityView } from "./views.js";
 
@@ -51,6 +52,20 @@ export interface Snapshot {
     tokens: { used: number; limit: number; calls: number; costUsd: number };
     counts: Record<UserState, number>;
   };
+  /** The settings form (catalogue + values) and the outcome of the last change sent from a device. Absent when the PC did not pass them. */
+  settings?: SnapshotSettings;
+}
+
+export interface SnapshotSettings extends SettingsView {
+  remote: {
+    id: string;
+    sentAt: number;
+    appliedAt: string;
+    device: string | null;
+    ok: boolean;
+    changed: string[];
+    errors: { key: string; problem: string }[];
+  } | null;
 }
 
 function withSeries(store: Store, v: EntityView): SnapshotItem {
@@ -61,7 +76,7 @@ function withSeries(store: Store, v: EntityView): SnapshotItem {
   return { ...v, series };
 }
 
-export function buildSnapshot(db: Db, store: Store, budget: Budget, now: Date, opts: { maxBytes?: number } = {}): Snapshot {
+export function buildSnapshot(db: Db, store: Store, budget: Budget, now: Date, opts: { maxBytes?: number; settings?: SnapshotSettings } = {}): Snapshot {
   const d = digestFor(db, store);
   const kept = [...listEntities(db, store, { state: "kept", limit: 200 }), ...listEntities(db, store, { state: "trying", limit: 200 })];
   const seen = new Set([...d.items, ...kept].map((v) => v.id));
@@ -107,6 +122,7 @@ export function buildSnapshot(db: Db, store: Store, budget: Budget, now: Date, o
       tokens: { used: t.inTokens + t.outTokens, limit: t.limit, calls: t.calls, costUsd: t.costUsd },
       counts,
     },
+    ...(opts.settings ? { settings: opts.settings } : {}),
   };
   // Fit into one Firestore document: drop explore items first, then the lowest-ranked kept ones. The digest always stays.
   const max = opts.maxBytes ?? SNAPSHOT_MAX_BYTES;

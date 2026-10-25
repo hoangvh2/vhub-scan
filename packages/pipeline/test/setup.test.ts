@@ -62,7 +62,7 @@ describe("doctor: GitHub token", () => {
 });
 
 describe("scan summary", () => {
-  const base: RunStats = { runId: "r", collected: 12, created: 10, merged: 2, dropped: { scope: 3, thin: 1 }, scored: 8, triaged: 8, carded: 3, digest: 3, llmCalls: 2, cacheHits: 0, tokensToday: 7000, degraded: [], sourceErrors: [] };
+  const base: RunStats = { runId: "r", collected: 12, created: 10, merged: 2, dropped: { scope: 3, thin: 1 }, scored: 8, triaged: 8, carded: 3, digest: 3, llmCalls: 2, cacheHits: 0, tokensToday: 7000, degraded: [], sourceErrors: [], recheck: null };
   it("says what happened and where to look next", () => {
     const s = runSummary(base);
     expect(s).toContain("Thu thập 12 mục (mới 10, gộp trùng 2), loại bởi luật 4");

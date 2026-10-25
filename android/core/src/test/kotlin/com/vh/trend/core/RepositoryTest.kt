@@ -1,6 +1,13 @@
 package com.vh.trend.core
 
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.io.IOException
 import kotlin.test.Test
@@ -21,6 +28,8 @@ class FakeNet {
     val log = mutableListOf<String>()
     val bodies = mutableListOf<String>()
     var refreshCalls = 0
+    /** The rules refuse settings documents (403), as they do for an oversized or malformed one. */
+    var rejectSettings = false
 
     val http = Http { r ->
         log += "${r.method} ${r.url}"
@@ -35,6 +44,7 @@ class FakeNet {
                 if (!allowed) return@Http HttpResponse(403, "{}")
                 if (r.method == "GET") cloudSnapshot?.let { HttpResponse(200, """{"fields":{"payload":{"stringValue":${kotlinx.serialization.json.JsonPrimitive(it)}}}}""") } ?: HttpResponse(404, "{}")
                 else {
+                    if (rejectSettings && r.url.contains("/settingsInbox?")) return@Http HttpResponse(403, "{}")
                     val id = r.url.substringAfter("documentId=")
                     if (inbox.containsKey(id)) HttpResponse(409, "{}") else { inbox[id] = r.body!!; HttpResponse(200, "{}") }
                 }
@@ -206,4 +216,145 @@ class RepositoryTest {
         r.refresh()
         assertTrue(net.log.isEmpty())
     }
+
+    // ---- settings edited on the phone ----
+
+    /** The contract snapshot as the PC would publish it after applying a phone change made at [sentAt]. */
+    private fun pcApplied(net: FakeNet, sentAt: Long, values: Map<String, JsonElement>): String {
+        val root = TrendJson.parseToJsonElement(net.contract).jsonObject
+        val st = root["settings"]!!.jsonObject
+        val remote = JsonObject(st["remote"]!!.jsonObject + mapOf("id" to JsonPrimitive("sevt_x"), "sentAt" to JsonPrimitive(sentAt)))
+        val settings = JsonObject(st + mapOf("values" to JsonObject(st["values"]!!.jsonObject + values), "remote" to remote))
+        return JsonObject(root + mapOf("settings" to settings, "generatedAt" to JsonPrimitive("2026-10-27T00:00:00.000Z"))).toString()
+    }
+
+    private fun digest(s: SyncState) = s.snapshot!!.settings!!.values["funnel.digestSize"]!!.jsonPrimitive.int
+
+    @Test
+    fun theSettingsPageArrivesWithTheSnapshot() = runTest {
+        val r = signedIn(FakeNet())
+        val st = r.refresh().snapshot!!.settings!!
+        assertTrue(st.defs.size > 30)
+        assertTrue(st.groups.map { it.id }.containsAll(listOf("scan", "filter", "ai", "projects", "system")))
+        assertEquals(false, st.def("llm.command")!!.phoneEditable)
+        assertEquals(false, st.def("server.port")!!.phoneEditable)
+        assertEquals("Năng suất cá nhân", st.label("productivity"))
+        assertTrue(st.remote!!.ok)
+    }
+
+    @Test
+    fun aSettingsChangeShowsAtOnceReachesTheInboxOnceAndClearsWhenThePcAppliesIt() = runTest {
+        val net = FakeNet()
+        val r = signedIn(net)
+        val before = r.refresh()
+        assertEquals(5, digest(before))
+        net.cloudUp = false
+        val (shown, errors) = r.changeSettings(JsonObject(mapOf("funnel.digestSize" to JsonPrimitive(9))))
+        assertTrue(errors.isEmpty())
+        assertEquals(9, digest(shown))
+        assertEquals(1, shown.settingsWaiting.size)
+        // Offline: still waiting, still shown.
+        assertEquals(9, digest(r.refresh()))
+        net.cloudUp = true
+        clock += 60_000
+        val sent = r.refresh()
+        val body = net.inbox["sevt_1_00000000"]!!
+        assertTrue(net.log.any { it.endsWith("/owners/owner/settingsInbox?documentId=sevt_1_00000000") })
+        assertTrue(body.contains(""""patch":{"stringValue":"{\"funnel.digestSize\":9}"}"""), body)
+        assertTrue(body.contains(""""baseRev":{"stringValue":"${before.snapshot!!.settings!!.rev}"}""") && body.contains(""""device":{"stringValue":"test"}"""), body)
+        assertTrue(body.contains(""""at":{"integerValue":"$clock"}"""), body) // stamped when it left the phone
+        // The PC has not taken it yet: the phone keeps showing the new value.
+        assertEquals(9, digest(sent))
+        assertTrue(sent.settingsWaiting.single().sent)
+        // Sending again sends nothing new.
+        r.refresh()
+        assertEquals(1, net.inbox.keys.count { it.startsWith("s") })
+        // The PC applied it and published.
+        net.cloudSnapshot = pcApplied(net, clock, mapOf("funnel.digestSize" to JsonPrimitive(9)))
+        val done = r.refresh()
+        assertTrue(done.settingsWaiting.isEmpty())
+        assertEquals(9, digest(done))
+    }
+
+    @Test
+    fun editsMadeBeforeSendingTravelAsOneChange() = runTest {
+        val net = FakeNet()
+        val r = signedIn(net)
+        r.refresh()
+        net.cloudUp = false
+        r.changeSettings(JsonObject(mapOf("funnel.digestSize" to JsonPrimitive(7))))
+        val (s, _) = r.changeSettings(JsonObject(mapOf("funnel.digestSize" to JsonPrimitive(8), "sources.hn.enabled" to JsonPrimitive(false))))
+        assertEquals(1, s.settingsWaiting.size)
+        assertEquals(8, digest(s))
+        net.cloudUp = true
+        r.refresh()
+        val body = net.inbox.values.single { it.contains("patch") }
+        assertTrue(body.contains("funnel.digestSize\\\":8") && body.contains("sources.hn.enabled\\\":false"), body)
+    }
+
+    @Test
+    fun invalidValuesAreRefusedOnThePhoneWithThePcsWording() = runTest {
+        val net = FakeNet()
+        val r = signedIn(net)
+        r.refresh()
+        suspend fun problems(k: String, v: JsonElement) = r.changeSettingsBlocking(JsonObject(mapOf(k to v)))
+        assertEquals("lớn nhất là 30", problems("funnel.digestSize", JsonPrimitive(99)))
+        assertEquals("phải là số nguyên", problems("funnel.digestSize", JsonPrimitive(2.5)))
+        assertEquals("chỉ sửa được trong config.json trên PC", problems("llm.command", JsonPrimitive("/tmp/evil")))
+        assertEquals("chỉ sửa được trên dashboard của PC", problems("server.port", JsonPrimitive(4000)))
+        assertEquals("không có cài đặt này", problems("nope", JsonPrimitive(1)))
+        val topic = { id: String -> JsonObject(mapOf("id" to JsonPrimitive(id), "label" to JsonPrimitive("Khác"), "enabled" to JsonPrimitive(true), "queries" to JsonArray(emptyList()), "keywords" to JsonArray(emptyList()))) }
+        assertEquals("chủ đề 1: mã \"other\" dành cho nhóm Khác", problems("topics", JsonArray(listOf(topic("other")))))
+        assertEquals("chủ đề 2: mã \"a\" bị trùng", problems("topics", JsonArray(listOf(topic("a"), topic("a")))))
+        assertEquals("có mục để trống", problems("scope.exclude", JsonArray(listOf(JsonPrimitive(" ")))))
+        assertTrue(r.state().settingsWaiting.isEmpty())
+        assertTrue(net.inbox.isEmpty())
+    }
+
+    @Test
+    fun aChangeTheCloudRefusesIsDroppedWithAnExplanation() = runTest {
+        val net = FakeNet().apply { rejectSettings = true }
+        val r = signedIn(net)
+        r.refresh()
+        r.changeSettings(JsonObject(mapOf("funnel.digestSize" to JsonPrimitive(9))))
+        val s = r.refresh()
+        assertTrue(s.settingsWaiting.isEmpty())
+        assertEquals(5, digest(s))
+        assertTrue(s.error!!.contains("từ chối"), s.error)
+    }
+
+    @Test
+    fun settingsCannotBeChangedBeforeThePcSendsThem() = runTest {
+        val net = FakeNet().apply { cloudSnapshot = contract.replace("\"settings\"", "\"settingsFromTheFuture\"") }
+        val r = signedIn(net)
+        assertNull(r.refresh().snapshot!!.settings)
+        val (_, errors) = r.changeSettings(JsonObject(mapOf("funnel.digestSize" to JsonPrimitive(9))))
+        assertTrue(errors.single().problem.contains("npm run sync"))
+    }
+
+    @Test
+    fun signOutForgetsUnsentSettings() = runTest {
+        val net = FakeNet()
+        val r = signedIn(net)
+        r.refresh()
+        net.cloudUp = false
+        r.changeSettings(JsonObject(mapOf("funnel.digestSize" to JsonPrimitive(9))))
+        r.signOut()
+        assertNull(r.signIn("google.id.token"))
+        net.cloudUp = true
+        assertTrue(r.refresh().settingsWaiting.isEmpty())
+        assertTrue(net.inbox.isEmpty())
+    }
+
+    @Test
+    fun topicIdsFollowThePcsRule() {
+        assertEquals("tai-chinh-ca-nhan", SettingRules.slug("Tài chính cá nhân"))
+        assertEquals("doi-song", SettingRules.slug("Đời sống!"))
+        assertEquals("chu-de", SettingRules.slug("  ***  "))
+        assertEquals(32, SettingRules.slug("a".repeat(50)).length)
+        val named = SettingRules.withTopicIds(listOf(Topic("productivity", "Năng suất"), Topic("moi-1", "Năng suất"), Topic("moi-2", "Khác"), Topic("moi-3", "Other")))
+        assertEquals(listOf("productivity", "nang-suat", "khac", "other-2"), named.map { it.id })
+    }
+
+    private suspend fun TrendRepository.changeSettingsBlocking(patch: JsonObject) = changeSettings(patch).second.joinToString { it.problem }
 }

@@ -4,10 +4,11 @@ import { canonicalKey } from "./canonical.js";
 import { Budget } from "./llm/budget.js";
 import type { LlmRunner } from "./llm/runner.js";
 import { dayOf, type Clock, type EntityRow, type RawItem } from "./model.js";
+import { categories, OTHER_CATEGORY } from "./config.js";
 import {
-  CARD_VERSION, CATEGORIES, TRIAGE_VERSION, cardBlock, cardSchema, cardSystem, triageLine, triageSchema, triageSystem,
+  CARD_VERSION, TRIAGE_VERSION, cardBlock, cardSchema, cardSystem, triageLine, triageSchema, triageSystem,
 } from "./prompts.js";
-import { applyRules } from "./rules.js";
+import { applyRules, rulesFingerprint } from "./rules.js";
 import { heuristic, velocity, type Obs } from "./score.js";
 import type { GitHubSource } from "./sources/github.js";
 import type { HackerNewsSource } from "./sources/hackernews.js";
@@ -46,6 +47,8 @@ export interface RunStats {
   tokensToday: number;
   degraded: string[];
   sourceErrors: string[];
+  /** Set when the filter settings changed since the last run and items already seen were checked again. */
+  recheck: { dropped: number; revived: number } | null;
 }
 
 const STALE_LOCK_MS = 30 * 60_000;
@@ -74,7 +77,7 @@ export async function runPipeline(d: Deps): Promise<RunStats> {
 
   const st: RunStats = {
     runId, collected: 0, created: 0, merged: 0, dropped: {}, scored: 0, triaged: 0, carded: 0, digest: 0,
-    llmCalls: 0, cacheHits: 0, tokensToday: 0, degraded: [], sourceErrors: [],
+    llmCalls: 0, cacheHits: 0, tokensToday: 0, degraded: [], sourceErrors: [], recheck: null,
   };
   const calls0 = d.llm.calls;
   const hits0 = d.llm.cacheHits;
@@ -191,9 +194,49 @@ async function refresh(d: Deps, now: Date): Promise<void> {
 
 // ---------------------------------------------------------------------------------------------- rules / score
 
-const obsOf = (d: Deps, id: string): Obs[] => d.store.observations(id);
+const obsOf = (d: Pick<Deps, "store">, id: string): Obs[] => d.store.observations(id);
+
+const RULES_KEY = "rules.fingerprint";
+
+/**
+ * After the filter settings change, applies them to items already seen: items waiting for a decision that now match
+ * a rule are dropped, and items a rule dropped that no longer match come back (to 'normalized', so the normal pass
+ * judges them again, age included). What the user decided (kept, skipped, ...) is never touched. With `dryRun`, only
+ * counts. Costs no tokens.
+ */
+export function recheckRules(d: Pick<Deps, "db" | "store">, cfg: Config, now: Date, dryRun = false): { dropped: number; revived: number } {
+  const res = { dropped: 0, revived: 0 };
+  const ctx = (e: EntityRow) => ({
+    cfg,
+    now,
+    velocity: velocity(obsOf(d, e.id), e.created_at, now),
+    isHn: ((src) => src.length > 0 && src.every((s) => s.source === "hn"))(d.store.sightings(e.id)),
+    recheck: true,
+  });
+  const live = d.db.all<EntityRow>("SELECT * FROM entity WHERE stage IN ('filtered','scored','triaged','carded') AND user_state IN ('new','snoozed')");
+  const dropped = d.db.all<EntityRow>("SELECT * FROM entity WHERE stage = 'dropped' AND user_state = 'new' AND drop_reason IS NOT NULL AND drop_reason NOT IN ('old','skipped_by_user')");
+  const work = () => {
+    for (const e of live) {
+      const reason = applyRules(e, ctx(e));
+      if (!reason) continue;
+      res.dropped++;
+      if (!dryRun) d.db.run("UPDATE entity SET stage = 'dropped', drop_reason = ? WHERE id = ?", reason, e.id);
+    }
+    for (const e of dropped) {
+      if (applyRules(e, ctx(e))) continue;
+      res.revived++;
+      if (!dryRun) d.db.run("UPDATE entity SET stage = 'normalized', drop_reason = NULL WHERE id = ?", e.id);
+    }
+  };
+  if (dryRun) work();
+  else d.db.tx(work);
+  return res;
+}
 
 function rules(d: Deps, st: RunStats, now: Date): void {
+  const fp = rulesFingerprint(d.cfg);
+  const prev = d.db.kvGet(RULES_KEY);
+  if (prev !== undefined && prev !== fp) st.recheck = recheckRules(d, d.cfg, now);
   const rows = d.db.all<EntityRow>("SELECT * FROM entity WHERE stage = 'normalized'");
   d.db.tx(() => {
     for (const e of rows) {
@@ -213,6 +256,7 @@ function rules(d: Deps, st: RunStats, now: Date): void {
         d.db.run("UPDATE entity SET stage = 'filtered', drop_reason = NULL WHERE id = ?", e.id);
       }
     }
+    d.db.kvSet(RULES_KEY, fp);
   });
 }
 
@@ -252,6 +296,7 @@ async function triage(d: Deps, st: RunStats, now: Date): Promise<void> {
     "SELECT * FROM entity WHERE stage = 'scored' ORDER BY heuristic DESC, id LIMIT ?",
     d.cfg.funnel.triageTop,
   );
+  const cats = new Set(categories(d.cfg).map((c) => c.id));
   for (let i = 0; i < cands.length; i += d.cfg.funnel.triageBatch) {
     const batch = cands.slice(i, i + d.cfg.funnel.triageBatch);
     const user = batch
@@ -266,7 +311,7 @@ async function triage(d: Deps, st: RunStats, now: Date): Promise<void> {
       )
       .join("\n");
     const out = await d.llm.call(
-      { system: triageSystem(d.cfg), user, schema: triageSchema, model: d.cfg.llm.triageModel, stage: "triage", promptVersion: TRIAGE_VERSION, expectedOutTokens: 200 + batch.length * 120, effort: d.cfg.llm.triageEffort },
+      { system: triageSystem(d.cfg), user, schema: triageSchema(d.cfg), model: d.cfg.llm.triageModel, stage: "triage", promptVersion: TRIAGE_VERSION, expectedOutTokens: 200 + batch.length * 120, effort: d.cfg.llm.triageEffort },
       now,
     );
     if (out.kind === "skipped") {
@@ -278,7 +323,7 @@ async function triage(d: Deps, st: RunStats, now: Date): Promise<void> {
       for (const e of batch) {
         const r = byId.get(e.id);
         if (!r || !Number.isInteger(r.s)) continue;
-        const cat = (CATEGORIES as readonly string[]).includes(r.c) ? r.c : "other";
+        const cat = cats.has(r.c) ? r.c : OTHER_CATEGORY;
         d.db.run(
           "UPDATE entity SET stage = 'triaged', triage_score = ?, triage_cat = ?, triage_why = ?, triage_hash = content_hash WHERE id = ?",
           Math.max(0, Math.min(3, r.s)),

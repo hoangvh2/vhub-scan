@@ -23,7 +23,7 @@ const D: Demo[] = [
   {
     id: "github:tinyplan/weekboard", title: "tinyplan/weekboard", author: "tinyplan", license: "MIT",
     desc: "Plan your week in a plain Markdown file; a CLI turns it into calendar blocks and a Friday review.",
-    topics: ["productivity", "cli", "calendar"], score: 3, cat: "lập kế hoạch",
+    topics: ["productivity", "cli", "calendar"], score: 3, cat: "productivity",
     why: "Lập kế hoạch tuần bằng Markdown, tự xếp lịch; đúng nhu cầu tổ chức việc cá nhân.",
     stars: [41, 58, 77, 96, 120, 151, 183, 212, 240, 266], sources: ["github", "hn"], digest: "điểm 3, tăng nhanh (+26 sao/ngày)",
     card: {
@@ -39,7 +39,7 @@ const D: Demo[] = [
   {
     id: "github:quietdesk/inbox-zero-agent", title: "quietdesk/inbox-zero-agent", author: "quietdesk", license: "Apache-2.0",
     desc: "A local agent that labels, snoozes and drafts replies for Gmail using rules you write in YAML.",
-    topics: ["automation", "agent", "email"], score: 3, cat: "tự động hoá",
+    topics: ["automation", "agent", "email"], score: 3, cat: "automation",
     why: "Tác tử chạy cục bộ, luật viết bằng YAML; mẫu tốt cho tự động hoá có kiểm soát.",
     stars: [12, 19, 31, 44, 60, 73, 90, 104, 121, 139], sources: ["github"], digest: "điểm 3, nguồn theo dõi",
     card: {
@@ -52,7 +52,7 @@ const D: Demo[] = [
   {
     id: "url:habito.example.com", title: "Habito", author: "bob",
     desc: "A habit tracker and calendar assistant for busy people.",
-    topics: ["show-hn", "habit"], score: 2, cat: "đời sống",
+    topics: ["show-hn", "habit"], score: 2, cat: "other",
     why: "Theo dõi thói quen gắn với lịch; giao diện gọn, nhiều thảo luận trên HN.",
     points: [12, 38, 64, 81, 92], sources: ["hn"], digest: "điểm 2, HN 92 điểm",
     card: {
@@ -65,7 +65,7 @@ const D: Demo[] = [
   {
     id: "github:fernwood/receipt-ledger", title: "fernwood/receipt-ledger", author: "fernwood", license: "MIT",
     desc: "Forward receipts by email, get a monthly spending CSV and a budget report. Self-hosted, SQLite.",
-    topics: ["finance", "budget", "self-hosted"], score: 2, cat: "tài chính cá nhân",
+    topics: ["finance", "budget", "self-hosted"], score: 2, cat: "finance",
     why: "Ghi chi tiêu từ email hoá đơn, tự host bằng SQLite; nhỏ, dễ đọc.",
     stars: [210, 214, 219, 225, 230, 236, 241, 249, 255, 262], sources: ["github"], digest: "điểm 2",
     card: {
@@ -78,7 +78,7 @@ const D: Demo[] = [
   {
     id: "github:northpaw/standup-bot", title: "northpaw/standup-bot", author: "northpaw", license: "MIT",
     desc: "Generates a daily standup from your git commits, PRs and calendar; posts to Slack or prints it.",
-    topics: ["developer-tools", "automation", "claude-code"], score: 2, cat: "quy trình dev",
+    topics: ["developer-tools", "automation", "claude-code"], score: 2, cat: "claude-code",
     why: "Tự viết standup từ commit và lịch; tiết kiệm 10 phút mỗi sáng.",
     stars: [8, 15, 22, 30, 41, 49, 55, 60, 66, 71], sources: ["github"], digest: "điểm 2",
     card: {
@@ -91,7 +91,7 @@ const D: Demo[] = [
   {
     id: "github:lifehub/planner", title: "lifehub/planner", author: "lifehub", license: "MIT", state: "kept",
     desc: "A calendar assistant for personal life: reminders, budget and a weekly planner you own.",
-    topics: ["productivity", "calendar"], score: 3, cat: "lập kế hoạch",
+    topics: ["productivity", "calendar"], score: 3, cat: "productivity",
     why: "Trợ lý lịch cá nhân, dữ liệu do bạn giữ; gần với VH Flow.",
     stars: [140, 151, 160, 172, 185, 197, 205, 214, 226, 239], sources: ["github"],
     card: {
@@ -104,7 +104,7 @@ const D: Demo[] = [
   {
     id: "github:mintcli/clipnote", title: "mintcli/clipnote", author: "mintcli", license: "MIT", state: "trying",
     desc: "Clipboard history that turns copied snippets into searchable notes with tags.",
-    topics: ["notes", "cli"], score: 2, cat: "ghi chú",
+    topics: ["notes", "cli"], score: 2, cat: "productivity",
     why: "Biến clipboard thành ghi chú tìm được; nhỏ gọn.",
     stars: [55, 57, 60, 61, 64, 66, 69, 71, 72, 74], sources: ["github"],
     card: {
@@ -113,7 +113,7 @@ const D: Demo[] = [
       effort: "S", risk: "Clipboard có thể chứa mật khẩu; cần loại trừ.",
     },
   },
-  ...["sprintly/retro-kit|Retro templates and a timer for remote teams|quy trình nhóm|1", "dotfiles-pro/setup-kit|One command to set up a dev laptop with sane defaults|quy trình dev|2", "taskpond/kanban-tui|Kanban board in the terminal backed by a JSON file|lập kế hoạch|2", "mealmap/plan|Weekly meal planner that builds the shopping list|đời sống|1", "focusbar/menubar|Pomodoro timer in the menu bar with daily stats|tập trung|1"].map((s, i): Demo => {
+  ...["sprintly/retro-kit|Retro templates and a timer for remote teams|productivity|1", "dotfiles-pro/setup-kit|One command to set up a dev laptop with sane defaults|automation|2", "taskpond/kanban-tui|Kanban board in the terminal backed by a JSON file|productivity|2", "mealmap/plan|Weekly meal planner that builds the shopping list|other|1", "focusbar/menubar|Pomodoro timer in the menu bar with daily stats|productivity|1"].map((s, i): Demo => {
     const [name, desc, cat, score] = s.split("|") as [string, string, string, string];
     return {
       id: `github:${name}`, title: name, author: name.split("/")[0]!, desc, topics: ["productivity"], score: Number(score), cat,

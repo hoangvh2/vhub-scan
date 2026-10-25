@@ -6,7 +6,10 @@ import { describe, expect, it } from "vitest";
 import { fromTerraformOutput, parseCloudConfig, type CloudConfig } from "../src/cloud/config.js";
 import { decode, encode, FirestoreRest, type DocStore, type FsDoc, type Primitive } from "../src/cloud/firestore.js";
 import { ServiceAccountAuth, signJwt } from "../src/cloud/google.js";
-import { lastSync, syncOnce } from "../src/cloud/sync.js";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { lastRemoteSettings, lastSync, syncOnce } from "../src/cloud/sync.js";
+import { SettingsStore } from "../src/settingsStore.js";
 import { runPipeline } from "../src/pipeline.js";
 import { buildSnapshot, snapshotHash } from "../src/snapshot.js";
 import { NOW, rig } from "./helpers.js";
@@ -201,6 +204,54 @@ describe("sync", () => {
   });
 });
 
+describe("settings from the phone", () => {
+  const home = () => {
+    const dir = mkdtempSync(join(tmpdir(), "vhub-cloud-settings-"));
+    return new SettingsStore(join(dir, "config.json"), dir, () => NOW);
+  };
+  it("applies a valid change once, records the outcome in the snapshot, and removes it from the inbox", async () => {
+    const r = await seeded();
+    const settings = home();
+    const docs = new MemoryDocs();
+    const patch = { "funnel.digestSize": 8, topics: [{ id: "finance", label: "Tài chính", enabled: true, queries: ["topic:personal-finance"], keywords: ["budget"] }] };
+    docs.docs.set("owners/owner/settingsInbox/set_a_00000001", { patch: JSON.stringify(patch), baseRev: "x", at: NOW.getTime() - 1000, device: "Pixel 8" });
+    const d = { db: r.db, store: r.store, budget: r.deps.budget, docs, uid: "owner", clock: r.clock, settings };
+    const res = await syncOnce(d);
+    expect(res).toMatchObject({ ok: true, settingsApplied: 1 });
+    expect(settings.load().funnel.digestSize).toBe(8);
+    expect(settings.load().topics.map((t) => t.id)).toEqual(["finance"]);
+    expect(settings.history()[0]).toMatchObject({ source: "phone", device: "Pixel 8", changed: ["funnel.digestSize", "topics"] });
+    expect([...docs.docs.keys()]).toEqual(["owners/owner/snapshot/latest"]);
+    const snap = JSON.parse(String(docs.docs.get("owners/owner/snapshot/latest")!.payload));
+    expect(snap.settings.values["funnel.digestSize"]).toBe(8);
+    expect(snap.settings.remote).toMatchObject({ id: "set_a_00000001", ok: true, changed: ["funnel.digestSize", "topics"], device: "Pixel 8" });
+    expect(snap.settings.categories.map((c: { id: string }) => c.id)).toContain("finance");
+
+    // Delivered again (a retry after a lost reply): not applied twice.
+    docs.docs.set("owners/owner/settingsInbox/set_a_00000001", { patch: JSON.stringify({ "funnel.digestSize": 3 }), baseRev: "x", at: NOW.getTime(), device: "Pixel 8" });
+    expect((await syncOnce(d)).settingsApplied).toBe(0);
+    expect(settings.load().funnel.digestSize).toBe(8);
+  });
+  it("refuses invalid values, PC-only settings and the Claude command, and says why", async () => {
+    const r = await seeded();
+    const settings = home();
+    const docs = new MemoryDocs();
+    const d = { db: r.db, store: r.store, budget: r.deps.budget, docs, uid: "owner", clock: r.clock, settings };
+    docs.docs.set("owners/owner/settingsInbox/set_b_00000001", { patch: JSON.stringify({ "llm.command": "/tmp/evil", "funnel.digestSize": 6 }), baseRev: "x", at: NOW.getTime() - 3000, device: "web" });
+    docs.docs.set("owners/owner/settingsInbox/set_b_00000002", { patch: JSON.stringify({ "server.port": 5000 }), baseRev: "x", at: NOW.getTime() - 2000 });
+    docs.docs.set("owners/owner/settingsInbox/set_b_00000003", { patch: "{not json", baseRev: "x", at: NOW.getTime() - 1000 });
+    expect((await syncOnce(d)).settingsApplied).toBe(0);
+    expect(settings.load()).toEqual(new SettingsStore("/nonexistent/config.json", "/nonexistent").load()); // nothing changed
+    expect(lastRemoteSettings(r.db)).toMatchObject({ id: "set_b_00000003", ok: false });
+    expect(r.db.all<{ id: string; result: string }>("SELECT id, result FROM cloud_event WHERE action = 'settings' ORDER BY id")).toEqual([
+      { id: "set_b_00000001", result: "rejected" },
+      { id: "set_b_00000002", result: "rejected" },
+      { id: "set_b_00000003", result: "rejected" },
+    ]);
+    expect(settings.history()).toEqual([]);
+  });
+});
+
 describe("cloud config", () => {
   it("is built from terraform output -json", () => {
     const key = Buffer.from(JSON.stringify({ client_email: "a@b.iam.gserviceaccount.com", private_key: privateKey })).toString("base64");
@@ -218,7 +269,10 @@ describe("sync contract fixtures (shared with the Android app's tests)", () => {
   it("snapshot.v1.json matches what the PC produces", async () => {
     const r = await seeded();
     r.store.applyFeedback("github:lifehub/planner", "keep", NOW);
-    const s = JSON.stringify(buildSnapshot(r.db, r.store, r.deps.budget, NOW), null, 2) + "\n";
+    const home = mkdtempSync(join(tmpdir(), "vhub-contract-"));
+    const settings = new SettingsStore(join(home, "config.json"), home, () => NOW);
+    const remote = { id: "set_contract_01", sentAt: NOW.getTime() - 60_000, appliedAt: NOW.toISOString(), device: "Pixel 8", ok: true, changed: ["funnel.digestSize"], errors: [] };
+    const s = JSON.stringify(buildSnapshot(r.db, r.store, r.deps.budget, NOW, { settings: { ...settings.view(), remote } }), null, 2) + "\n";
     const file = join(dir, "snapshot.v1.json");
     if (process.env.UPDATE_CONTRACT || !existsSync(file)) {
       mkdirSync(dir, { recursive: true });

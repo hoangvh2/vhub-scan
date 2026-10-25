@@ -1,4 +1,4 @@
-import type { Config } from "./config.js";
+import { includeTerms, type Config } from "./config.js";
 import type { EntityRow } from "./model.js";
 import { hasTerm, textOf } from "./rules.js";
 import { tokens } from "./text.js";
@@ -43,7 +43,7 @@ export function heuristic({ e, obs, sources, bias, cfg, now }: ScoreInput): numb
   const age = e.created_at ? Math.max(0, (now.getTime() - Date.parse(e.created_at)) / 86_400_000) : 30;
   const recency = age <= 7 ? 1 : age <= 30 ? 0.5 : 0;
   const hay = textOf(e);
-  const hits = cfg.scope.include.filter((w) => hasTerm(hay, w)).length;
+  const hits = includeTerms(cfg).filter((w) => hasTerm(hay, w)).length;
   const fit = Math.min(3, hits) * 0.5;
   const seed = e.from_seed ? 1 : 0;
   const multi = Math.min(1.5, (sources - 1) * 0.5);
