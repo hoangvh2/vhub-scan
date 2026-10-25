@@ -1,4 +1,4 @@
-# Creates the release signing key for the Android app, outside the repo, and (optionally) uploads it
+﻿# Creates the release signing key for the Android app, outside the repo, and (optionally) uploads it
 # to the GitHub repository secrets that .github/workflows/android.yml reads.
 #   powershell -ExecutionPolicy Bypass -File android\scripts\new-keystore.ps1
 #   powershell -ExecutionPolicy Bypass -File android\scripts\new-keystore.ps1 -Upload
