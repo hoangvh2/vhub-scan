@@ -73,6 +73,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.vh.trend.BuildConfig
 import com.vh.trend.core.Action
 import com.vh.trend.core.Item
 import com.vh.trend.core.Source
@@ -462,7 +463,7 @@ fun SignInScreen(ui: UiState, on: UiActions) {
         Text("Đăng nhập", style = MaterialTheme.typography.headlineSmall, color = c.ink)
         Text("Xem và duyệt những ý tưởng mà PC đã quét. Chỉ tài khoản Google nằm trong danh sách cho phép mới vào được.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
         if (!ui.sync.configured) {
-            Notice("Bản APK này chưa được cấu hình Firebase. Đặt 3 biến FIREBASE_PROJECT_ID, FIREBASE_API_KEY, FIREBASE_WEB_CLIENT_ID trong GitHub (Settings → Secrets and variables → Actions → Variables) rồi chạy lại workflow Android.")
+            Notice("Bản APK ${BuildConfig.VERSION_NAME} được build khi GitHub chưa có cấu hình Firebase. Đặt FIREBASE_PROJECT_ID, FIREBASE_API_KEY, FIREBASE_WEB_CLIENT_ID trong GitHub (Settings → Secrets and variables → Actions, tab Variables hoặc Secrets), chạy lại workflow Android có tick publish, rồi cài APK mới nhất ở trang Releases.")
         } else {
             QuietButton(if (ui.signingIn) "Đang đăng nhập…" else "Đăng nhập với Google", modifier = Modifier.fillMaxWidth().testTag("signin")) { if (!ui.signingIn) on.signIn() }
         }
