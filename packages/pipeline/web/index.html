@@ -78,8 +78,9 @@ a.btn{text-decoration:none}
 .rowi:hover{background:var(--surface)}
 .rowi[aria-selected=true]{background:var(--surface);border-left-color:var(--accent)}
 .rowi .t{font-weight:600;font-size:14px;overflow-wrap:anywhere;line-height:1.3}
-.rowi .w{grid-column:2/4;color:var(--ink2);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.rowi .m{grid-column:2/4;display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--mute)}
+.rowi .w{grid-column:2/4;color:var(--ink2);font-size:13px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.rowi .m{grid-column:2/4;display:flex;gap:10px;font-size:12px;color:var(--mute)}
+.rowi .m:empty{display:none}
 .rowi .m .st{color:var(--pos);font-weight:600}.rowi .m .st.snoozed{color:var(--warn)}
 .rowi .delta{font-size:12px;color:var(--mute);text-align:right;white-space:nowrap;padding-top:1px}
 .rowi .delta b{color:var(--ink);font-weight:600}
@@ -88,14 +89,29 @@ a.btn{text-decoration:none}
 .score.s3{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
 
 .detail{background:var(--surface)}
-.dbody{padding:22px 26px 28px;display:grid;gap:22px;max-width:760px}
+.dbody{padding:22px 26px 28px;display:grid;gap:20px;max-width:720px}
 .dtop{display:grid;gap:8px}
 .dtop h2{font-size:22px;line-height:1.2;margin:0;letter-spacing:-.015em;overflow-wrap:anywhere}
 .dtop .desc{color:var(--ink2);font-size:14.5px}
 .facts{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--mute)}
 .facts b{color:var(--ink);font-weight:600}
-.why{border-left:2px solid var(--accent);padding:2px 0 2px 12px;font-size:14px}
+.why{border-left:3px solid var(--accent);padding:2px 0 2px 14px;font-size:17px;line-height:1.4;font-weight:500}
 .why small{display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--mute);margin-bottom:2px}
+.glance{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--ink2)}
+.glance b{color:var(--ink);font-weight:600}
+.todo{display:grid;gap:8px}
+.todo .one{font-size:15px;color:var(--ink)}
+.todo ul{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.todo li{font-size:14px;color:var(--ink2);padding-left:14px;position:relative}
+.todo li::before{content:"";position:absolute;left:0;top:.6em;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.todo li b{color:var(--ink);font-weight:600}
+.more{border-top:1px solid var(--line);padding-top:4px}
+.more>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:10px 0;color:var(--ink2);font-size:13.5px;font-weight:600}
+.more>summary::-webkit-details-marker{display:none}
+.more>summary::after{content:"";width:7px;height:7px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:rotate(45deg) translateY(-2px);margin-left:2px;transition:transform .15s}
+.more[open]>summary::after{transform:rotate(-135deg)}
+.more>div{display:grid;gap:20px;padding:6px 0 4px}
+.more .raw{color:var(--ink2);font-size:13.5px;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
 .sec h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:0 0 8px;font-weight:600}
 .cardgrid{display:grid;grid-template-columns:110px 1fr;gap:10px 16px;margin:0}
 .cardgrid dt{color:var(--mute);font-size:12.5px;padding-top:1px}
@@ -127,7 +143,14 @@ a.btn{text-decoration:none}
 @media (prefers-reduced-motion:reduce){.sk i{animation:none}}
 
 /* System view: full width under the list header. */
-.sys{padding:18px;display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-items:start}
+.sys{padding:18px;display:grid;gap:14px;align-content:start;max-width:980px}
+.sys .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));align-items:start}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tile{background:var(--raised);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;gap:4px;align-content:start}
+.tile small{font-size:12px;color:var(--mute)}
+.tile b{font-size:19px;font-weight:600;letter-spacing:-.01em}
+.tile .meter{margin-top:4px}
+.tile.bad b{color:var(--neg)}
 .panel{background:var(--raised);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px}
 .panel h3{margin:0;font-size:13px;font-weight:600}
 .panel .hint{font-size:12.5px;color:var(--mute)}
@@ -141,15 +164,17 @@ a.btn{text-decoration:none}
 .kv dt{color:var(--mute)}.kv dd{margin:0;text-align:right}
 .alert{font-size:12.5px;border-radius:6px;padding:8px 10px;background:var(--warn-soft);color:var(--warn)}
 .alert.bad{background:color-mix(in srgb,var(--neg) 12%,transparent);color:var(--neg)}
-.qr{display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:start}
+.qr{display:grid;grid-template-columns:minmax(0,170px) minmax(0,1fr);gap:16px;align-items:start}
 .qr .code{background:#fff;border-radius:6px;padding:6px;border:1px solid var(--line)}
 .qr .code svg{display:block;width:100%;height:auto}
-.qr ol{margin:0;padding-left:18px;font-size:13px;display:grid;gap:4px}
+.qr ol{margin:0;padding-left:18px;font-size:14px;display:grid;gap:6px}
 
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:8px;padding:8px 8px 8px 14px;display:flex;gap:12px;align-items:center;box-shadow:var(--shadow);transition:opacity .15s,transform .15s;z-index:20;max-width:calc(100vw - 32px)}
 #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 #toast button{all:unset;cursor:pointer;color:var(--accent-soft);font-weight:600;padding:4px 8px;border-radius:4px}
 @media (prefers-color-scheme:dark){#toast button{color:var(--accent)}}
+.keyhelp{padding:0 8px}.keyhelp>summary{cursor:pointer;font-size:12px;color:var(--mute);list-style:none}.keyhelp>summary::-webkit-details-marker{display:none}.keyhelp[open]>summary{margin-bottom:8px}
+@media (hover:none){.keyhelp{display:none}}
 .keys{font-size:12px;color:var(--mute);padding:0 8px;margin:0;display:grid;grid-template-columns:auto 1fr;gap:5px 10px;align-items:center}
 .keys dt{white-space:nowrap}.keys dd{margin:0}
 .keys kbd{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:3px;padding:0 4px;color:var(--ink2)}
@@ -161,7 +186,7 @@ a.btn{text-decoration:none}
 @media (max-width:1180px){
   .app{grid-template-columns:64px minmax(320px,1fr) minmax(380px,1.2fr)}
   .rail{padding:14px 8px;align-items:center}
-  .brand span,.brand b,.nav .label,.nav .count,.status .txt,.status .tok,.keys{display:none}
+  .brand span,.brand b,.nav .label,.nav .count,.status .txt,.status .tok,.keys,.keyhelp{display:none}
   .brand::before{content:"VH";font-weight:700;font-size:13px}
   .nav button{justify-content:center;width:40px;height:36px;padding:0}
   .status{padding:10px 0 0;justify-items:center}
@@ -195,9 +220,10 @@ a.btn{text-decoration:none}
   .acts{padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
   .acts .btn{height:40px;flex:1}
   .acts .sp{display:none}
-  .sys{padding:14px 16px;grid-template-columns:1fr}
+  .sys{padding:14px 16px}
+  .tiles{grid-template-columns:1fr 1fr 1fr;gap:8px}.tile{padding:10px}.tile b{font-size:16px}
   .qr{grid-template-columns:1fr}
-  .qr .code{max-width:280px}
+  .qr .code{max-width:240px}
   .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
   .tabbar button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:2px;padding:8px 0 7px;font-size:11.5px;color:var(--mute)}
   .tabbar button svg{width:20px;height:20px}
@@ -228,7 +254,7 @@ a.btn{text-decoration:none}
   <aside class="rail" aria-label="Điều hướng">
     <div class="brand"><b>VHub Trend</b><span>Scan</span></div>
     <nav class="nav" id="nav" role="tablist" aria-label="Màn hình"></nav>
-    <dl class="keys" aria-label="Phím tắt"><dt><kbd>J</kbd> <kbd>K</kbd></dt><dd>lên, xuống</dd><dt><kbd>E</kbd> <kbd>X</kbd> <kbd>S</kbd></dt><dd>giữ, bỏ, hoãn</dd><dt><kbd>O</kbd></dt><dd>mở trang gốc</dd><dt><kbd>/</kbd></dt><dd>tìm</dd><dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>đổi màn hình</dd></dl>
+    <details class="keyhelp"><summary>Phím tắt</summary><dl class="keys" aria-label="Phím tắt"><dt><kbd>J</kbd> <kbd>K</kbd></dt><dd>lên, xuống</dd><dt><kbd>E</kbd> <kbd>X</kbd> <kbd>S</kbd></dt><dd>giữ, bỏ, hoãn</dd><dt><kbd>O</kbd></dt><dd>mở trang gốc</dd><dt><kbd>/</kbd></dt><dd>tìm</dd><dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>đổi màn hình</dd></dl></details>
     <div class="status" id="status"></div>
   </aside>
 
@@ -335,7 +361,7 @@ function actionsFor(it) {
   return [
     ["keep", "Giữ", "check", "Đã giữ", it.userState === "kept"],
     ["skip", "Bỏ", "x", "Đã bỏ"],
-    ["snooze", "Hoãn 7 ngày", "clock", "Sẽ hiện lại sau 7 ngày"],
+    ["snooze", "Hoãn", "clock", "Sẽ hiện lại sau 7 ngày"],
   ];
 }
 
@@ -393,17 +419,13 @@ function gain(it) {
   return d > 0 ? d : null;
 }
 function row(it, i) {
-  const m = metricOf(it); const g = gain(it);
+  const m = metricOf(it);
   return h("li", { class: "rowi", role: "option", "aria-selected": String(i === ui.sel), "data-i": i, onclick: () => select(i, true) },
     scoreBars(it.triage.score),
     h("div", { class: "t" }, it.title),
-    h("div", { class: "delta num" }, m ? [h("b", {}, compact.format(m.v)), " ", m.u] : null, g ? h("div", {}, "+" + fmt.format(g)) : null),
+    h("div", { class: "delta num" }, m ? [h("b", {}, compact.format(m.v)), " ", m.u] : null),
     h("div", { class: "w" }, it.triage.why || it.description),
-    h("div", { class: "m" },
-      it.sources.join(" + "),
-      it.triage.cat && h("span", {}, it.triage.cat),
-      it.card && h("span", {}, "Nỗ lực " + (EFFORT[it.card.effort] || [it.card.effort])[0].toLowerCase()),
-      it.userState !== "new" && h("span", { class: "st " + it.userState }, STATE_LABEL[it.userState] || it.userState)));
+    h("div", { class: "m" }, it.userState !== "new" && h("span", { class: "st " + it.userState }, STATE_LABEL[it.userState] || it.userState)));
 }
 function skeleton() { return h("ul", { class: "sk", "aria-busy": "true", "aria-label": "Đang tải" }, [0, 1, 2, 3, 4].map((i) => h("li", {}, h("i", { style: `width:${55 + (i * 13) % 35}%` }), h("i", { style: "width:92%" }), h("i", { style: "width:40%" })))); }
 function empty(title, text, extra) { return h("div", { class: "empty" }, h("h3", {}, title), h("p", {}, text), extra || null); }
@@ -469,33 +491,33 @@ async function renderDetail() {
     v.replaceChildren(ui.tab === "system" ? h("div") : empty("Chọn một ý để xem chi tiết", "Dùng J/K để đi qua danh sách, E để giữ, X để bỏ."));
     return;
   }
-  const c = it.card; const m = metricOf(it); const href = safeHref(it.url);
+  const c = it.card; const m = metricOf(it); const href = safeHref(it.url); const eff = c && (EFFORT[c.effort] || [c.effort, 0]);
+  // First screen = decision: what it is, why it matters, what to do with it. Everything else is one tap away.
+  const more = h("details", { class: "more" }, h("summary", {}, "Xem thêm"),
+    h("div", {},
+      c && c.learn && h("section", { class: "sec" }, h("h3", {}, "Đáng học"), h("div", {}, c.learn)),
+      c && c.risk && h("section", { class: "sec" }, h("h3", {}, "Lưu ý"), h("div", {}, c.risk)),
+      it.description && h("section", { class: "sec" }, h("h3", {}, "Mô tả gốc"), h("div", { class: "raw" }, it.description)),
+      h("section", { class: "sec" }, h("h3", {}, m ? (m.u === "sao" ? "Sao GitHub theo ngày" : "Điểm HN theo ngày") : "Xu hướng"), h("div", { id: "chart" }, it.series ? spark(it.series, m ? m.u : "") : h("div", { class: "mute" }, "…"))),
+      h("section", { class: "sec" }, h("h3", {}, "Nguồn" + (it.license ? " · " + it.license : "") + " · thấy " + ago(it.firstSeen)), h("ul", { class: "evi", id: "evidence" }, it.sources.map((s) => h("li", {}, h("span", { class: "src" }, s), href ? h("a", { href, target: "_blank", rel: "noopener noreferrer" }, it.url) : it.url))))));
   const body = h("div", { class: "dbody" },
     h("div", { class: "dtop" },
       h("h2", {}, it.title),
-      it.description && h("div", { class: "desc" }, it.description),
-      h("div", { class: "facts num" },
-        it.triage.score != null && h("span", {}, "Điểm AI ", h("b", {}, it.triage.score + "/3")),
-        m && h("span", {}, h("b", {}, fmt.format(m.v)), " " + m.u),
-        it.triage.cat && h("span", {}, it.triage.cat),
-        it.license && h("span", {}, it.license),
-        h("span", {}, "Thấy " + ago(it.firstSeen)),
-        it.userState !== "new" && h("span", {}, h("b", {}, STATE_LABEL[it.userState])))),
-    it.triage.why && h("div", { class: "why" }, h("small", {}, "Vì sao đáng xem"), it.triage.why, it.shownReason ? h("span", { class: "mute" }, " · " + it.shownReason) : null),
-    c ? h("section", { class: "sec" }, h("h3", {}, "Phân tích"),
-      h("dl", { class: "cardgrid" },
-        h("dt", {}, "Là gì"), h("dd", {}, c.what),
-        h("dt", {}, "Đáng học"), h("dd", {}, c.learn),
-        c.apply && c.apply.length ? [h("dt", {}, "Áp dụng"), h("dd", { class: "apply" }, c.apply.map((a) => h("div", {}, h("b", {}, a.project), " — ", a.how)))] : null,
-        h("dt", {}, "Nỗ lực"), h("dd", {}, h("span", { class: "effort", "aria-hidden": "true" }, [1, 2, 3].map((k) => h("i", { class: (EFFORT[c.effort] || [0, 0])[1] >= k ? "on" : "" }))), (EFFORT[c.effort] || [c.effort])[0]),
-        h("dt", {}, "Lưu ý"), h("dd", {}, c.risk)))
-      : h("div", { class: "mute", style: "font-size:13px" }, "Chưa có thẻ phân tích chi tiết: ý này chưa vào nhóm điểm cao của lần quét."),
-    h("section", { class: "sec" }, h("h3", {}, m ? (m.u === "sao" ? "Sao GitHub theo ngày" : "Điểm HN theo ngày") : "Xu hướng"), h("div", { id: "chart" }, it.series ? spark(it.series, m ? m.u : "") : h("div", { class: "mute" }, "…"))),
-    h("section", { class: "sec" }, h("h3", {}, "Nguồn"), h("ul", { class: "evi", id: "evidence" }, it.sources.map((s) => h("li", {}, h("span", { class: "src" }, s), href ? h("a", { href, target: "_blank", rel: "noopener noreferrer" }, it.url) : it.url)))));
+      h("div", { class: "glance num" },
+        it.triage.score != null && h("span", {}, "Điểm ", h("b", {}, it.triage.score + "/3")),
+        m && h("span", {}, h("b", {}, compact.format(m.v)), " " + m.u),
+        eff && h("span", {}, h("span", { class: "effort", "aria-hidden": "true" }, [1, 2, 3].map((k) => h("i", { class: eff[1] >= k ? "on" : "" }))), "Nỗ lực " + String(eff[0]).toLowerCase()),
+        it.userState !== "new" && h("b", {}, STATE_LABEL[it.userState]))),
+    it.triage.why && h("div", { class: "why" }, it.triage.why),
+    c && h("section", { class: "todo" },
+      h("div", { class: "one" }, c.what),
+      c.apply && c.apply.length ? h("ul", {}, c.apply.map((a) => h("li", {}, h("b", {}, a.project), ": ", a.how))) : null),
+    !c && h("div", { class: "mute", style: "font-size:13px" }, "Chưa có phân tích chi tiết cho ý này."),
+    more);
   v.replaceChildren(body); v.scrollTop = 0;
   acts.hidden = false;
   acts.replaceChildren(
-    ...actionsFor(it).map(([a, t, ic, msg, on], idx) => h("button", { class: "btn" + (idx === 0 ? " keep" : ""), "aria-pressed": on ? "true" : null, onclick: () => act(it, a, msg) }, icon(ic), t)),
+    ...actionsFor(it).map(([a, t, ic, msg, on], idx) => h("button", { class: "btn" + (idx === 0 ? " keep" : ""), title: msg, "aria-pressed": on ? "true" : null, onclick: () => act(it, a, msg) }, icon(ic), t)),
     h("span", { class: "sp" }),
     href && h("a", { class: "btn ghost", href, target: "_blank", rel: "noopener noreferrer" }, icon("out"), "Mở"));
   // Evidence and the daily series come from the entity endpoint (the list does not carry them).
@@ -543,19 +565,25 @@ async function renderSystem(v) {
   ];
   const pairPanel = panel("Kết nối điện thoại", h("p", { class: "hint" }, "Đang tạo mã…"));
   pairPanel.id = "pair";
-  v.replaceChildren(h("div", { class: "sys" }, pairPanel, ...panels));
+  const bad = r && r.status === "failed";
+  const tiles = h("div", { class: "tiles" },
+    h("div", { class: "tile" + (bad ? " bad" : "") }, h("small", {}, "Lần quét gần nhất"), h("b", {}, r ? (r.status === "running" ? "Đang chạy…" : ago(r.started_at)) : "Chưa có"), bad ? h("small", {}, "Bị lỗi") : null),
+    h("div", { class: "tile" + (s.cloud && s.cloud.last && !s.cloud.last.ok ? " bad" : "") }, h("small", {}, "Đồng bộ cloud"), h("b", {}, s.cloud ? (s.cloud.last ? (s.cloud.last.ok ? ago(s.cloud.last.at) : "Lỗi") : "Chưa đồng bộ") : "Chưa bật")),
+    h("div", { class: "tile" }, h("small", {}, "AI hôm nay"), h("b", { class: "num" }, pct + "%"), h("div", { class: "meter" + (pct > 85 ? " hot" : "") }, h("i", { style: `width:${pct}%` }))));
+  const alerts = [r && r.error ? h("div", { class: "alert bad" }, r.error) : null, st.sourceErrors && st.sourceErrors.length ? h("div", { class: "alert bad" }, "Lỗi nguồn: " + st.sourceErrors.join("; ")) : null].filter(Boolean);
+  v.replaceChildren(h("div", { class: "sys" }, tiles, ...alerts, pairPanel,
+    h("details", { class: "more" }, h("summary", {}, "Chi tiết kỹ thuật"), h("div", { class: "grid" }, ...panels))));
   renderDetail();
   try {
     const p = await api("/api/pair");
     const svg = new DOMParser().parseFromString(p.svg, "image/svg+xml").documentElement;
     const steps = h("ol", {},
-      h("li", {}, "Cài app VHub Trend (file APK trong mục Releases của repo)."),
-      h("li", {}, "Mở app → Kết nối với PC → Quét mã."),
-      h("li", {}, p.cloud ? "Xong. Ở nhà app nói chuyện thẳng với PC; ra ngoài dùng bản trên cloud." : "Xong. App xem được khi cùng Wi-Fi với PC (cloud chưa bật)."));
+      h("li", {}, "Cài app VHub Trend (APK ở mục Releases của repo)."),
+      h("li", {}, "Mở app, bấm Quét mã QR rồi hướng camera vào mã bên cạnh."));
     pairPanel.replaceChildren(...[h("h3", {}, "Kết nối điện thoại"),
-      p.lanReachable ? null : h("div", { class: "alert" }, "Dashboard đang chỉ mở cho máy này. Tắt rồi chạy lại: npm run dashboard -- --lan, để điện thoại cùng Wi-Fi vào được."),
+      p.lanReachable ? null : h("div", { class: "alert" }, "Dashboard chưa mở cho điện thoại. Chạy lại: npm run dashboard -- --lan"),
       h("div", { class: "qr" }, h("div", { class: "code" }, document.importNode(svg, true)), h("div", { style: "display:grid;gap:8px" }, steps,
-        h("p", { class: "hint" }, `Mã hết hạn lúc ${new Date(p.expiresAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}. Ai quét được mã này thì xem và sửa được danh sách của bạn.`),
+        h("p", { class: "hint" }, `Mã hết hạn lúc ${new Date(p.expiresAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}. Đừng chia sẻ mã này.`),
         h("div", {}, h("button", { class: "btn sm", onclick: async () => { try { await navigator.clipboard.writeText(p.code); toast("Đã chép mã. Dán vào app nếu không quét được."); } catch { toast("Trình duyệt không cho chép; dùng npm run pair."); } } }, "Chép mã dạng chữ"))))].filter(Boolean));
   } catch (e) {
     pairPanel.replaceChildren(h("h3", {}, "Kết nối điện thoại"), h("p", { class: "hint" }, "Phiên bản dashboard này chưa tạo được mã ghép nối. Chạy npm run pair trong terminal."));

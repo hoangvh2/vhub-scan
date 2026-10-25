@@ -7,8 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -65,8 +66,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.vh.trend.core.Action
 import com.vh.trend.core.Item
@@ -230,56 +235,59 @@ fun DetailPane(it: Item, tab: Tab, on: UiActions, onBack: (() -> Unit)?, modifie
             }
             HorizontalDivider(color = c.line)
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 18.dp).widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        var more by rememberSaveable(it.id) { mutableStateOf(false) }
+        // First screen = the decision: what it is, why it matters, what to do with it. The rest is one tap away.
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 18.dp).widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(it.title, style = MaterialTheme.typography.headlineSmall, color = c.ink)
-                if (it.description.isNotBlank()) Text(it.description, style = MaterialTheme.typography.bodyLarge, color = c.ink2)
-                Facts(it)
+                Glance(it)
             }
             it.triage.why?.let { why ->
                 Row(Modifier.height(IntrinsicSize.Min)) {
-                    Box(Modifier.width(2.dp).fillMaxHeight().background(c.accent))
-                    Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        SectionLabel("Vì sao đáng xem")
-                        Text(why + (it.shownReason?.let { r -> " · $r" } ?: ""), style = MaterialTheme.typography.bodyLarge, color = c.ink)
-                    }
+                    Box(Modifier.width(3.dp).fillMaxHeight().background(c.accent))
+                    Text(why, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium), color = c.ink, modifier = Modifier.padding(start = 14.dp))
                 }
             }
             if (card != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SectionLabel("Phân tích")
-                    Field("Là gì", card.what)
-                    Field("Đáng học", card.learn)
-                    if (card.apply.isNotEmpty()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("Áp dụng", style = MaterialTheme.typography.bodySmall, color = c.mute)
-                            card.apply.forEach { a ->
-                                Text(buildString { append(a.project); append(" — "); append(a.how) }, style = MaterialTheme.typography.bodyLarge, color = c.ink)
-                            }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(card.what, style = MaterialTheme.typography.bodyLarge, color = c.ink)
+                    card.apply.forEach { a ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(Modifier.padding(top = 9.dp).size(5.dp).clip(CircleShape).background(c.accent))
+                            Text(buildAnnotatedString { withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = c.ink)) { append(a.project) }; append(": "); append(a.how) }, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                         }
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Nỗ lực", style = MaterialTheme.typography.bodySmall, color = c.mute)
-                        val (label, level) = EFFORT[card.effort] ?: (card.effort to 0)
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                            (1..3).forEach { k -> Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(if (level >= k) c.ink2 else Color.Transparent).border(1.dp, if (level >= k) c.ink2 else c.line2, RoundedCornerShape(2.dp))) }
-                            Spacer(Modifier.width(6.dp)); Text(label, style = MaterialTheme.typography.bodyLarge, color = c.ink)
-                        }
-                    }
-                    Field("Lưu ý", card.risk)
                 }
             } else {
-                Text("Chưa có thẻ phân tích chi tiết: ý này chưa vào nhóm điểm cao của lần quét.", style = MaterialTheme.typography.bodySmall, color = c.mute)
+                Text("Chưa có phân tích chi tiết cho ý này.", style = MaterialTheme.typography.bodySmall, color = c.mute)
             }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val m = it.metric
-                SectionLabel(if (m?.second == "sao") "Sao GitHub theo ngày" else if (m != null) "Điểm HN theo ngày" else "Xu hướng")
-                Sparkline(it.series, m?.second ?: "")
+            HorizontalDivider(color = c.line)
+            TextButton(onClick = { more = !more }, modifier = Modifier.testTag("more")) {
+                Text(if (more) "Thu gọn" else "Xem thêm", color = c.ink2, fontWeight = FontWeight.SemiBold)
             }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SectionLabel("Nguồn")
-                Text(it.sources.joinToString(" + ") + " · " + it.url, style = MaterialTheme.typography.bodyMedium, color = c.ink2,
-                    modifier = Modifier.clickable(enabled = it.url.startsWith("https://")) { uri.openUri(it.url) })
+            if (more) {
+                Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    card?.let { cd ->
+                        Field("Đáng học", cd.learn)
+                        Field("Lưu ý", cd.risk)
+                    }
+                    if (it.description.isNotBlank()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("Mô tả gốc", style = MaterialTheme.typography.bodySmall, color = c.mute)
+                            Text(it.description, style = MaterialTheme.typography.bodyMedium, color = c.ink2, maxLines = 6, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val m = it.metric
+                        SectionLabel(if (m?.second == "sao") "Sao GitHub theo ngày" else if (m != null) "Điểm HN theo ngày" else "Xu hướng")
+                        Sparkline(it.series, m?.second ?: "")
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        SectionLabel("Nguồn" + (it.license?.let { l -> " · $l" } ?: ""))
+                        Text(it.sources.joinToString(" + ") + " · " + it.url, style = MaterialTheme.typography.bodyMedium, color = c.ink2,
+                            modifier = Modifier.clickable(enabled = it.url.startsWith("https://")) { uri.openUri(it.url) })
+                    }
+                }
             }
         }
         HorizontalDivider(color = c.line)
@@ -291,7 +299,7 @@ fun DetailPane(it: Item, tab: Tab, on: UiActions, onBack: (() -> Unit)?, modifie
             ) else listOf(
                 Triple("Giữ", Action.Keep, "Đã giữ") to Icons.Check,
                 Triple("Bỏ", Action.Skip, "Đã bỏ") to Icons.Close,
-                Triple("Hoãn 7 ngày", Action.Snooze, "Sẽ hiện lại sau 7 ngày") to Icons.Clock,
+                Triple("Hoãn", Action.Snooze, "Sẽ hiện lại sau 7 ngày") to Icons.Clock,
             )
             acts.forEachIndexed { i, (a, icon) ->
                 val on1 = i == 0 && it.userState == a.second.state
@@ -304,16 +312,20 @@ fun DetailPane(it: Item, tab: Tab, on: UiActions, onBack: (() -> Unit)?, modifie
 }
 
 @Composable
-private fun Facts(it: Item) {
+private fun Glance(it: Item) {
     val c = T.c
-    val parts = buildList {
-        it.triage.score?.let { s -> add("Điểm AI $s/3") }
-        it.metric?.let { (v, u) -> add("${num(v)} $u") }
-        it.triage.cat?.let(::add)
-        it.license?.let(::add)
-        if (it.userState != "new") add(STATE_LABEL[it.userState] ?: it.userState)
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        it.triage.score?.let { s -> Text("Điểm $s/3", style = MaterialTheme.typography.bodyMedium, color = c.ink2) }
+        it.metric?.let { (v, u) -> Text("${num(v)} $u", style = MaterialTheme.typography.bodyMedium, color = c.ink2) }
+        it.card?.let { cd ->
+            val (label, level) = EFFORT[cd.effort] ?: (cd.effort to 0)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                (1..3).forEach { k -> Box(Modifier.size(9.dp).clip(RoundedCornerShape(2.dp)).background(if (level >= k) c.ink2 else Color.Transparent).border(1.dp, if (level >= k) c.ink2 else c.line2, RoundedCornerShape(2.dp))) }
+                Spacer(Modifier.width(4.dp)); Text("Nỗ lực " + label.lowercase(), style = MaterialTheme.typography.bodyMedium, color = c.ink2)
+            }
+        }
+        if (it.userState != "new") Text(STATE_LABEL[it.userState] ?: it.userState, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = c.pos)
     }
-    Text(parts.joinToString("   "), style = MaterialTheme.typography.bodySmall, color = c.mute)
 }
 
 @Composable
@@ -329,53 +341,60 @@ private fun Field(label: String, value: String) {
 fun SystemPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier) {
     val c = T.c
     var confirm by rememberSaveable { mutableStateOf(false) }
+    var tech by rememberSaveable { mutableStateOf(false) }
     val s = ui.snapshot
     val r = s?.health?.lastRun
     Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(Tab.System.label, style = MaterialTheme.typography.headlineSmall, color = c.ink)
         SourceLine(ui.sync, ui.refreshing, now)
         ui.sync.error?.let { Notice(it) }
-        Panel("Lần quét gần nhất") {
-            if (r == null) Text("PC chưa quét lần nào.", style = MaterialTheme.typography.bodyMedium, color = c.mute)
-            else {
-                val steps = listOf("Thu thập" to r.collected, "Thực thể mới" to r.created, "Phân loại AI" to r.triaged, "Thẻ chi tiết" to r.carded, "Vào digest" to r.digest)
-                val top = steps.maxOf { it.second }.coerceAtLeast(1)
-                steps.forEachIndexed { i, (k, n) ->
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(k, style = MaterialTheme.typography.bodySmall, color = c.ink2, modifier = Modifier.width(96.dp))
-                        Box(Modifier.weight(1f).height(8.dp)) {
-                            Box(Modifier.fillMaxHeight().fillMaxWidth(n.toFloat() / top).clip(RoundedCornerShape(2.dp)).background(if (i == steps.lastIndex) c.accent else c.ink2))
-                        }
-                        Text(num(n), style = MaterialTheme.typography.bodySmall, color = c.ink, modifier = Modifier.width(40.dp))
-                    }
-                }
-                KV("Bắt đầu", ago(epochOf(r.startedAt), now))
-                KV("Trạng thái", r.status)
-                KV("Gọi AI / dùng lại cache", "${r.llmCalls} / ${r.cacheHits}")
-                r.error?.let { Notice(it) }
-            }
-        }
-        s?.health?.tokens?.let { t ->
-            Panel("Token AI hôm nay") {
-                val pct = (t.used * 100 / t.limit.coerceAtLeast(1)).coerceIn(0, 100)
-                Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(3.dp)).background(c.line)) {
-                    Box(Modifier.fillMaxHeight().fillMaxWidth(pct / 100f).background(if (pct > 85) c.accent else c.ink2))
-                }
-                KV("Đã dùng", "${num(t.used)} / ${num(t.limit)}")
-                KV("Số lần gọi", num(t.calls))
-            }
+        val tokens = s?.health?.tokens
+        val pct = tokens?.let { (it.used * 100 / it.limit.coerceAtLeast(1)).coerceIn(0, 100) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Tile("Lần quét", r?.let { ago(epochOf(it.startedAt), now) } ?: "Chưa có", Modifier.weight(1f), bad = r?.status == "failed")
+            Tile("Đang xem", when (ui.sync.source) { Source.Lan -> "PC, Wi-Fi"; Source.Cloud -> "Cloud"; Source.Cache -> "Bản lưu"; null -> "Chưa có" }, Modifier.weight(1f))
+            Tile("AI hôm nay", pct?.let { "$it%" } ?: "–", Modifier.weight(1f), bad = (pct ?: 0) > 85)
         }
         Panel("Kết nối") {
-            KV("Nguồn đang xem", when (ui.sync.source) { Source.Lan -> "PC qua Wi-Fi"; Source.Cloud -> "Cloud"; Source.Cache -> "Bản lưu"; null -> "Chưa có" })
-            ui.sync.lanUrl?.let { KV("Địa chỉ PC", it) }
-            KV("Cloud", if (ui.sync.cloudEnabled) "Đã bật" else "Chưa bật (chỉ xem khi cùng Wi-Fi)")
-            KV("Thao tác chờ gửi", num(ui.sync.pending))
+            KV("Cloud", if (ui.sync.cloudEnabled) "Đã bật" else "Chưa bật")
+            if (ui.sync.pending > 0) KV("Thao tác chờ gửi", num(ui.sync.pending))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                 QuietButton("Cập nhật", Icons.Refresh) { on.refresh() }
                 QuietButton("Ghép nối lại", Icons.Scan) { on.scan() }
             }
             TextButton(onClick = { confirm = true }, modifier = Modifier.testTag("unpair")) { Text("Huỷ ghép nối", color = c.neg) }
         }
+        TextButton(onClick = { tech = !tech }, modifier = Modifier.testTag("tech")) {
+            Text(if (tech) "Ẩn chi tiết kỹ thuật" else "Chi tiết kỹ thuật", color = c.ink2, fontWeight = FontWeight.SemiBold)
+        }
+        if (tech) {
+            Panel("Lần quét gần nhất") {
+                if (r == null) Text("PC chưa quét lần nào.", style = MaterialTheme.typography.bodyMedium, color = c.mute)
+                else {
+                    val steps = listOf("Thu thập" to r.collected, "Thực thể mới" to r.created, "Phân loại AI" to r.triaged, "Thẻ chi tiết" to r.carded, "Vào digest" to r.digest)
+                    val top = steps.maxOf { it.second }.coerceAtLeast(1)
+                    steps.forEachIndexed { i, (k, n) ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(k, style = MaterialTheme.typography.bodySmall, color = c.ink2, modifier = Modifier.width(96.dp))
+                            Box(Modifier.weight(1f).height(8.dp)) {
+                                Box(Modifier.fillMaxHeight().fillMaxWidth(n.toFloat() / top).clip(RoundedCornerShape(2.dp)).background(if (i == steps.lastIndex) c.accent else c.ink2))
+                            }
+                            Text(num(n), style = MaterialTheme.typography.bodySmall, color = c.ink, modifier = Modifier.width(40.dp))
+                        }
+                    }
+                    KV("Trạng thái", r.status)
+                    KV("Gọi AI / dùng lại cache", "${r.llmCalls} / ${r.cacheHits}")
+                }
+            }
+            tokens?.let { t ->
+                Panel("Token AI hôm nay") {
+                    KV("Đã dùng", "${num(t.used)} / ${num(t.limit)}")
+                    KV("Số lần gọi", num(t.calls))
+                }
+            }
+            ui.sync.lanUrl?.let { Panel("Địa chỉ PC") { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.ink) } }
+        }
+        r?.error?.let { Notice(it) }
     }
     if (confirm) UnpairDialog(onCancel = { confirm = false }, onConfirm = { confirm = false; on.unpair() })
 }
@@ -392,6 +411,18 @@ fun UnpairDialog(onCancel: () -> Unit, onConfirm: () -> Unit) {
         dismissButton = { TextButton(onClick = onCancel, modifier = Modifier.testTag("unpair-cancel")) { Text("Không", color = c.ink) } },
         confirmButton = { TextButton(onClick = onConfirm, modifier = Modifier.testTag("unpair-confirm")) { Text("Huỷ ghép nối", color = c.neg, fontWeight = FontWeight.SemiBold) } },
     )
+}
+
+@Composable
+private fun Tile(label: String, value: String, modifier: Modifier = Modifier, bad: Boolean = false) {
+    val c = T.c
+    Column(
+        modifier.clip(RoundedCornerShape(8.dp)).background(c.raised).border(1.dp, c.line, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = c.mute, maxLines = 1)
+        Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = if (bad) c.neg else c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 @Composable
@@ -426,11 +457,11 @@ fun PairScreen(ui: UiState, on: UiActions) {
     ) {
         Text("VHub Trend", style = MaterialTheme.typography.labelLarge, color = c.mute)
         Text("Kết nối với PC", style = MaterialTheme.typography.headlineSmall, color = c.ink)
-        Text("App này xem và sắp xếp những ý tưởng mà PC của bạn đã quét. Ở nhà, app nói chuyện thẳng với PC qua Wi-Fi; khi bạn bật cloud, ra ngoài vẫn xem được.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
+        Text("Xem và sắp xếp những ý tưởng mà PC đã quét.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
         Column(Modifier.clip(RoundedCornerShape(8.dp)).background(c.raised).border(1.dp, c.line, RoundedCornerShape(8.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Step(1, "Trên PC chạy:  npm run dashboard -- --lan")
-            Step(2, "Mở dashboard → Hệ thống → Kết nối điện thoại")
-            Step(3, "Bấm Quét mã bên dưới và đưa camera vào mã QR")
+            Step(2, "Chạy npm run pair (hoặc mở dashboard → Hệ thống)")
+            Step(3, "Bấm Quét mã QR bên dưới")
         }
         QuietButton("Quét mã QR", Icons.Scan, modifier = Modifier.fillMaxWidth()) { on.scan() }
         TextButton(onClick = { paste = !paste }) { Text(if (paste) "Ẩn ô dán mã" else "Không quét được? Dán mã dạng chữ", color = c.ink2) }
@@ -444,7 +475,7 @@ fun PairScreen(ui: UiState, on: UiActions) {
         }
         ui.pairError?.let { Notice(it) }
         Spacer(Modifier.height(8.dp))
-        Text("Mã chứa quyền xem và sửa danh sách của bạn. Chỉ quét trên điện thoại của bạn.", style = MaterialTheme.typography.bodySmall, color = c.mute)
+        Text("Mã QR cho phép xem và sửa danh sách của bạn: đừng chia sẻ.", style = MaterialTheme.typography.bodySmall, color = c.mute)
     }
 }
 

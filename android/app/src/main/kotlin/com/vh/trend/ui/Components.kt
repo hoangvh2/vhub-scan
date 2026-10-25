@@ -98,24 +98,22 @@ fun ItemRow(item: Item, selected: Boolean, onClick: () -> Unit) {
                     Text(" $u", style = MaterialTheme.typography.bodySmall, color = c.mute)
                 }
             }
-            Text(item.triage.why ?: item.description, style = MaterialTheme.typography.bodyMedium, color = c.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(item.triage.why ?: item.description, style = MaterialTheme.typography.bodyMedium, color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
             MetaRow(item)
         }
     }
 }
 
+/** Only the state ("Đã giữ", "Đang hoãn"…) shows in the list; source, category and effort are in the detail. */
 @Composable
 fun MetaRow(item: Item) {
+    if (item.userState == "new") return
     val c = T.c
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        val style = MaterialTheme.typography.bodySmall
-        Text(item.sources.joinToString(" + "), style = style, color = c.mute)
-        item.triage.cat?.let { Text(it, style = style, color = c.mute) }
-        item.card?.let { Text("Nỗ lực " + (EFFORT[it.effort]?.first ?: it.effort).lowercase(), style = style, color = c.mute) }
-        if (item.userState != "new") {
-            Text(STATE_LABEL[item.userState] ?: item.userState, style = style.copy(fontWeight = FontWeight.SemiBold), color = if (item.userState == "snoozed") c.warn else c.pos)
-        }
-    }
+    Text(
+        STATE_LABEL[item.userState] ?: item.userState,
+        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+        color = if (item.userState == "snoozed") c.warn else c.pos,
+    )
 }
 
 @Composable

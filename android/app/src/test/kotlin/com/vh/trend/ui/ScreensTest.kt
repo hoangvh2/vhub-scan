@@ -44,6 +44,23 @@ class ScreensTest {
     @Test @Config(qualifiers = TABLET) fun tabletToday() = shot("tablet-today-light", Fixtures.ui())
     @Test @Config(qualifiers = TABLET) fun tabletExploreDark() = shot("tablet-explore-dark", Fixtures.ui(tab = Tab.Explore), dark = true)
 
+    // "Xem thêm" folds the secondary analysis, chart and source; tests open it and capture the long version.
+    @Test @Config(qualifiers = PHONE)
+    fun phoneDetailExpanded() {
+        rule.setContent { TrendTheme { TrendApp(Fixtures.ui(selected = Fixtures.snapshot.digest.first().id), object : UiActions {}, Fixtures.now) } }
+        rule.onNodeWithTag("more").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage("build/screenshots/phone-detail-expanded.png")
+    }
+
+    @Test @Config(qualifiers = PHONE)
+    fun phoneSystemTechnical() {
+        rule.setContent { TrendTheme { TrendApp(Fixtures.ui(tab = Tab.System), object : UiActions {}, Fixtures.now) } }
+        rule.onNodeWithTag("tech").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage("build/screenshots/phone-system-technical.png")
+    }
+
     // Destructive action (CLAUDE.md): a confirmation dialog, tested for both "Không" and the red action.
     @Test @Config(qualifiers = PHONE)
     fun unpairAsksFirstAndNoKeepsThePairing() {
