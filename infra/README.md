@@ -113,7 +113,7 @@ App đăng nhập bằng hộp chọn tài khoản của Android và chỉ chạ
 
 1. Đã có khoá ký trong GitHub secrets ([`android/README.md`](../android/README.md)) và workflow Android chạy xong trên `main`. Mở lần chạy đó → **Summary**: mục **Signing certificate SHA-1** có chuỗi dạng `AB:CD:…`.
 2. `infra/terraform.tfvars`: thêm `android_sha1 = ["AB:CD:…"]` → `terraform apply` (đăng ký app `com.vh.trend` và tạo Android OAuth client; mất khoảng 1–2 phút để Google áp dụng).
-3. In các giá trị để app biết project: `cd infra && terraform output -json android_env` (Windows PowerShell cũng dùng được). Vào GitHub repo → **Settings → Secrets and variables → Actions → Variables** → tạo 4 biến cùng tên: `FIREBASE_PROJECT_ID`, `FIREBASE_API_KEY`, `FIREBASE_WEB_CLIENT_ID`, `FIREBASE_OWNER_UID`. Đây là mã định danh, không phải bí mật (nhưng đừng commit vào repo).
+3. In các giá trị để app biết project: `cd infra && terraform output -json android_env` (Windows PowerShell cũng dùng được). Vào GitHub repo → **Settings → Secrets and variables → Actions → Variables** → tạo 4 biến cùng tên: `FIREBASE_PROJECT_ID`, `FIREBASE_API_KEY`, `FIREBASE_WEB_CLIENT_ID`, `FIREBASE_OWNER_UID`. Đây là mã định danh, không phải bí mật (nhưng đừng commit vào repo). Lỡ tạo ở tab **Secrets** cùng tên cũng được. Sau đó chạy workflow **Android** (Run workflow, tick publish) và cài APK mới nhất: APK build trước đó vẫn không đăng nhập được. Thiếu biến thì workflow báo lỗi và không publish.
 4. Chạy lại workflow **Android** (Actions → Android → Run workflow, bật publish). Tải APK mới ở Releases, cài, mở app → **Đăng nhập với Google**.
 
 APK build trước khi có biến `FIREBASE_*` hiện thông báo cấu hình thay vì nút đăng nhập.
