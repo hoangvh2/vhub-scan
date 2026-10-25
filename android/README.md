@@ -2,8 +2,8 @@
 
 App điện thoại xem và xử lý danh sách ý tưởng mà PC đã quét. PC vẫn là nơi giữ dữ liệu; app chỉ đọc bản chụp (snapshot) và gửi lại thao tác của bạn (giữ, bỏ, để sau…).
 
-- Ở nhà, cùng Wi-Fi: app gọi thẳng PC (`npm run dashboard -- --lan`).
-- Ra ngoài: app đọc bản chụp trên Firestore (cần bật cloud một lần theo [`infra/README.md`](../infra/README.md)). Thao tác làm khi ở ngoài được PC áp dụng ở lần đồng bộ kế tiếp.
+- Mặc định (đã bật cloud theo [`infra/README.md`](../infra/README.md)): app đọc bản chụp PC đã đẩy lên Firestore, ở đâu cũng xem được. Thao tác duyệt được PC áp dụng ở lần đồng bộ kế tiếp (sau mỗi lần quét, hoặc mỗi 10 phút khi dashboard đang chạy).
+- Tùy chọn khi cùng Wi-Fi: app gọi thẳng PC (`npm run dashboard -- --lan`) cho nhanh và thấy thay đổi ngay.
 - Không mạng: app hiện bản chụp gần nhất, ghi thao tác vào hàng đợi và gửi khi có mạng.
 
 ## Trạng thái (thật)
@@ -20,7 +20,7 @@ App điện thoại xem và xử lý danh sách ý tưởng mà PC đã quét. P
 1. Mở https://github.com/hoangvh2/vhub-scan/actions/workflows/android.yml → bấm lần chạy mới nhất có dấu xanh → kéo xuống **Artifacts** → tải `VHubTrend-apk-release` (hoặc `VHubTrend-apk-throwaway` nếu chưa đặt khóa, xem bên dưới). Khi đã có bản phát hành, lấy file `.apk` ở mục **Releases** của repo cho tiện.
 2. Giải nén, chép file `.apk` sang điện thoại (Google Drive, cáp USB, Zalo "Cloud của tôi"…), mở file.
 3. Android hỏi "Cài ứng dụng không rõ nguồn gốc" → cho phép với ứng dụng bạn dùng để mở file → **Cài đặt**.
-4. Trên PC: chạy `npm run dashboard -- --lan` và giữ cửa sổ mở. Mở một terminal khác, chạy `npm run pair` để in mã QR (hoặc mở trang **Hệ thống** trên dashboard web, mã QR ở đó). Đã bật cloud thì cùng mã này dùng được cả khi ra ngoài.
+4. Trên PC: chạy `npm run pair` để in mã QR (hoặc mở trang **Hệ thống** trên dashboard web, mã QR ở đó). Đã bật cloud thì không cần làm gì thêm; chưa bật cloud thì chạy thêm `npm run dashboard -- --lan` và giữ cửa sổ mở.
 5. Trong app: **Quét mã QR** → hướng camera vào mã. Không quét được thì bấm **Không quét được? Dán mã dạng chữ** và dán đoạn chữ in dưới mã QR.
 
 Yêu cầu: Android 8.0 trở lên. Quét QR dùng trình quét của Google Play services, app không xin quyền camera.

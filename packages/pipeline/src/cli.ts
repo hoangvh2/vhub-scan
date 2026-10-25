@@ -268,9 +268,15 @@ async function main(): Promise<number> {
       const art = qrTerminal(code, process.stdout.columns ?? 80);
       console.log(art ?? "(Cửa sổ terminal hẹp quá để vẽ QR. Mở dashboard → Hệ thống → Kết nối điện thoại để quét, hoặc dán mã bên dưới.)");
       console.log("\nCách ghép nối:");
-      console.log("  1. Trên PC chạy:  npm run dashboard -- --lan   (giữ cửa sổ mở) để điện thoại cùng Wi-Fi vào được");
-      console.log("  2. Trên điện thoại: mở app VHub Trend → Kết nối với PC → Quét mã (hoặc Dán mã)");
-      console.log(cloud ? "  3. Mã có hạn 1 giờ. Sau khi ghép, app tự dùng cloud khi bạn ra khỏi nhà." : "  3. Cloud chưa bật: app chỉ xem được khi cùng Wi-Fi với PC. Bật cloud: xem infra/README.md");
+      if (cloud) {
+        console.log("  1. Trên điện thoại: mở app VHub Trend → Kết nối với PC → Quét mã (hoặc Dán mã).");
+        console.log("  2. Mã có hạn 1 giờ. Xong là app đọc dữ liệu từ cloud, ở đâu cũng xem được; không cần mở dashboard.");
+        console.log("  (Tùy chọn, nhanh hơn khi cùng Wi-Fi: chạy  npm run dashboard -- --lan  và giữ cửa sổ mở.)");
+      } else {
+        console.log("  1. Trên PC chạy:  npm run dashboard -- --lan   (giữ cửa sổ mở) để điện thoại cùng Wi-Fi vào được");
+        console.log("  2. Trên điện thoại: mở app VHub Trend → Kết nối với PC → Quét mã (hoặc Dán mã)");
+        console.log("  3. Cloud chưa bật: app chỉ xem được khi cùng Wi-Fi với PC. Bật cloud: xem infra/README.md");
+      }
       console.log(`  Địa chỉ trong mã: ${lan.join(", ") || "(không thấy mạng LAN nào)"}`);
       console.log("\nMã (dán vào app nếu không quét được; giữ riêng, ai có mã này xem và sửa được danh sách của bạn):");
       console.log(code);
