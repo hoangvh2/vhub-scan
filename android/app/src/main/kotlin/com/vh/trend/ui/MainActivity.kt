@@ -22,6 +22,7 @@ import com.vh.trend.core.TrendRepository
 import com.vh.trend.data.PrefsKeyValue
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
 
 private val settings = CloudSettings(BuildConfig.FIREBASE_PROJECT_ID, BuildConfig.FIREBASE_API_KEY, BuildConfig.FIREBASE_WEB_CLIENT_ID, BuildConfig.FIREBASE_OWNER_UID)
 
@@ -55,6 +56,10 @@ class MainActivity : ComponentActivity() {
             override fun undo(n: Notice) = vm.undo(n)
             override fun dismissNotice() = vm.dismissNotice()
             override fun signIn() = pickGoogleAccount()
+            override fun category(id: String?) = vm.category(id)
+            override fun editSetting(key: String, value: JsonElement, reset: Boolean) = vm.editSetting(key, value, reset)
+            override fun discardSettings() = vm.discardSettings()
+            override fun saveSettings() = vm.saveSettings()
             override fun signOut() {
                 vm.signOut()
                 lifecycleScope.launch { GoogleSignIn.forget(this@MainActivity) }

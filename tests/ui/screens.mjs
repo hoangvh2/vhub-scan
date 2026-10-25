@@ -46,9 +46,38 @@ try {
   await shot("phone-today-dark", { ...phone, colorScheme: "dark" });
   await shot("phone-explore-light", { ...phone, colorScheme: "light" }, (p) => p.click(".tabbar button >> nth=2"));
   await shot("phone-system-dark", { ...phone, colorScheme: "dark" }, (p) => p.click(".tabbar button >> nth=3"));
+  await shot("phone-explore-topic-dark", { ...phone, colorScheme: "dark" }, async (p) => { await p.click(".tabbar button >> nth=2"); await p.click("#cats .chip >> nth=1"); await p.waitForSelector(".rowi"); });
+  // Settings: the page, an unsaved change with its token estimate, and the destructive "delete topic" confirmation.
+  await shot("desktop-settings-light", { ...desk, colorScheme: "light" }, (p) => p.keyboard.press("5"));
+  await shot("desktop-settings-dirty-dark", { ...desk, colorScheme: "dark" }, async (p) => {
+    await p.keyboard.press("5");
+    await p.fill("#c-funnel-triageTop", "80");
+    await p.locator("#c-funnel-triageTop").scrollIntoViewIfNeeded();
+    await p.waitForFunction(() => /→/.test(document.querySelector("#save-detail")?.textContent ?? ""));
+  });
+  await shot("phone-settings-light", { ...phone, colorScheme: "light" }, (p) => p.click(".tabbar button >> nth=4"));
+  await shot("phone-settings-dark", { ...phone, colorScheme: "dark" }, async (p) => { await p.click(".tabbar button >> nth=4"); await p.click(".gnav .chip >> nth=2"); });
+  // CLAUDE.md: a destructive action asks first; "Huỷ" keeps the topic, the red action removes it (still unsaved).
+  await shot("phone-settings-delete-topic", { ...phone, colorScheme: "light" }, async (p) => {
+    await p.click(".tabbar button >> nth=4");
+    await p.waitForSelector("[data-del=finance]");
+    const n = await p.locator(".topic").count();
+    await p.click("[data-del=finance]");
+    await p.click("#cd-cancel");
+    await p.waitForSelector("dialog.confirm", { state: "detached" });
+    if ((await p.locator(".topic").count()) !== n) problems.push("delete topic: Huỷ removed the topic");
+    await p.click("[data-del=finance]");
+    await p.waitForSelector("dialog.confirm");
+    await p.screenshot({ path: join(out, "phone-settings-delete-confirm.png") });
+    await p.click("#cd-ok");
+    // The dialog's close event (and the re-render after it) runs as a separate task.
+    await p.waitForFunction((want) => document.querySelectorAll(".topic").length === want, n - 1, { timeout: 3000 }).catch(() => {});
+    if ((await p.locator(".topic").count()) !== n - 1) problems.push("delete topic: Xoá did not remove the topic");
+    if (!(await p.locator("#savebar").isVisible())) problems.push("delete topic: no unsaved-changes bar");
+  });
 } finally {
   await b.close();
   server.kill();
 }
-console.log(problems.length ? problems.join("\n") : `ok: 10 screenshots in ${out}, no console errors, no horizontal overflow`);
+console.log(problems.length ? problems.join("\n") : `ok: 17 screenshots in ${out}, no console errors, no horizontal overflow`);
 process.exit(problems.length ? 1 : 0);

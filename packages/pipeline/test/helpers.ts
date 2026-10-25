@@ -1,4 +1,4 @@
-import { defaultConfig, type Config } from "../src/config.js";
+import { defaultConfig, githubSettings, type Config } from "../src/config.js";
 import { Db } from "../src/db.js";
 import { Budget } from "../src/llm/budget.js";
 import { FakeLlm } from "../src/llm/fake.js";
@@ -79,7 +79,7 @@ export function rig(opts: { cfg?: Config; fetchImpl?: typeof fetch; hnFetch?: ty
   const budget = new Budget(db, cfg.budget.dailyTokens);
   const runner = new LlmRunner(fake, db, budget, async () => undefined);
   const clock = opts.clock ?? new TestClock(NOW);
-  const github = opts.fetchImpl ? new GitHubSource({ cfg: cfg.sources.github, fetchImpl: opts.fetchImpl, sleep: async () => undefined }) : undefined;
+  const github = opts.fetchImpl ? new GitHubSource({ cfg: githubSettings(cfg), fetchImpl: opts.fetchImpl, sleep: async () => undefined }) : undefined;
   const hn = opts.hnFetch
     ? (last: number) => new HackerNewsSource({ cfg: cfg.sources.hn, fetchImpl: opts.hnFetch, sleep: async () => undefined, lastMaxId: last })
     : undefined;

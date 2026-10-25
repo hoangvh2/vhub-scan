@@ -2,7 +2,7 @@
   "_huong_dan": [
     "File này là config của VHub Trend Scan. Các dòng bắt đầu bằng \"_huong_dan\" chỉ là ghi chú, chương trình bỏ qua.",
     "BẮT BUỘC: sửa mọi chỗ có chữ TODO: trong \"projects\" bên dưới.",
-    "Mục nào không có trong file thì dùng giá trị mặc định (xem packages/pipeline/src/config.ts).",
+    "Mục nào không có trong file thì dùng giá trị mặc định. Xem và sửa MỌI cài đặt, kèm giải thích từng mục: trang Cài đặt của dashboard (npm run dashboard).",
     "Sửa xong, chạy: npm run doctor"
   ],
   "projects": [
@@ -17,13 +17,9 @@
   },
   "sources": {
     "github": {
-      "_huong_dan": "Không bắt buộc. seeds = tên tài khoản GitHub bạn muốn theo dõi (người hoặc tổ chức), ví dụ [\"anthropics\", \"simonw\"]. queries = cú pháp tìm kiếm của GitHub; {d14} nghĩa là 14 ngày trước.",
+      "_huong_dan": "Không bắt buộc. seeds = tên tài khoản GitHub bạn muốn theo dõi (người hoặc tổ chức), ví dụ [\"anthropics\", \"simonw\"]. Quét cái gì do các Chủ đề quyết định (trang Cài đặt); queries ở đây chỉ là query chạy thêm.",
       "enabled": true,
-      "queries": [
-        "topic:claude-code created:>{d14} stars:>=3",
-        "topic:productivity created:>{d14} stars:>=5",
-        "topic:automation created:>{d14} stars:>=5"
-      ],
+      "queries": [],
       "seeds": [],
       "perQuery": 30,
       "refreshMax": 40

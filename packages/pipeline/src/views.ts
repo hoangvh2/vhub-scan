@@ -59,12 +59,16 @@ export function digestFor(db: Db, store: Store, day?: string): { day: string | n
   return { day: d, items };
 }
 
-export function listEntities(db: Db, store: Store, o: { state?: string; q?: string; limit?: number }): EntityView[] {
+export function listEntities(db: Db, store: Store, o: { state?: string; q?: string; cat?: string; limit?: number }): EntityView[] {
   const where: string[] = ["stage != 'dropped'"];
   const p: (string | number)[] = [];
   if (o.state) {
     where.push("user_state = ?");
     p.push(o.state);
+  }
+  if (o.cat) {
+    where.push("triage_cat = ?");
+    p.push(o.cat);
   }
   if (o.q) {
     where.push("(title LIKE ? OR description LIKE ? OR topics LIKE ?)");

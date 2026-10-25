@@ -15,6 +15,7 @@ import type { CloudConfig } from "../../packages/pipeline/src/cloud/config.js";
 import { FirestoreRest } from "../../packages/pipeline/src/cloud/firestore.js";
 import { ServiceAccountAuth } from "../../packages/pipeline/src/cloud/google.js";
 import { syncOnce } from "../../packages/pipeline/src/cloud/sync.js";
+import { SettingsStore } from "../../packages/pipeline/src/settingsStore.js";
 import { runPipeline } from "../../packages/pipeline/src/pipeline.js";
 import { rig } from "../../packages/pipeline/test/helpers.js";
 import { cfg, world } from "../../packages/pipeline/test/world.js";
@@ -142,6 +143,53 @@ describe("hosted dashboard", () => {
     if (shots) await phone.page.screenshot({ path: join(shots, "hosted-phone.png") });
     expect(await phone.page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
     await phone.ctx.close();
+    expect(problems.filter((p) => !/Failed to load resource/.test(p))).toEqual([]);
+  });
+
+  it("edits a setting on the web; the PC checks it, writes config.json on its next sync, and the page shows it applied", async () => {
+    await fetch(`${FS}/emulator/v1/projects/${PROJECT}/databases/(default)/documents`, { method: "DELETE" });
+    const r = rig({ cfg: cfg(), ...world() });
+    await runPipeline(r.deps);
+    const home = mkdtempSync(join(tmpdir(), "vhub-settings-"));
+    const settings = new SettingsStore(join(home, "config.json"), home);
+    const auth = new ServiceAccountAuth(cloud);
+    const docs = new FirestoreRest({ projectId: PROJECT, token: () => auth.token(), baseUrl: FS });
+    const sync = () => syncOnce({ db: r.db, store: r.store, budget: r.deps.budget, docs, uid: "owner", clock: r.clock, settings });
+    expect(await sync()).toMatchObject({ ok: true, pushed: true, settingsApplied: 0 });
+    const shots = process.env.HOSTED_SHOTS;
+
+    const { ctx, page } = await open({ ...devices["Pixel 7"] });
+    await page.goto(base);
+    await page.waitForSelector("#fake-google");
+    await signInAs(page, "me@example.com");
+    await page.waitForSelector(".rowi");
+    await page.click(".tabbar button >> nth=4");
+    await page.fill("#c-funnel-digestSize", "9");
+    await page.waitForSelector("#savebar:not([hidden])");
+    // Settings only config.json may change are not offered for editing on the hosted page.
+    expect(await page.locator("#c-llm-command").evaluate((el) => el.tagName)).toBe("DIV");
+    expect(await page.locator("#c-server-port").evaluate((el) => el.tagName)).toBe("DIV");
+    await page.click("#save");
+    await page.waitForSelector("#settings-pending");
+    if (shots) await page.screenshot({ path: join(shots, "hosted-settings-pending.png") });
+    const sent = await docs.list("owners/owner/settingsInbox");
+    expect(sent).toHaveLength(1);
+
+    // The PC applies it: config.json changes (with a backup), the inbox is emptied, the result goes into the snapshot.
+    expect(await sync()).toMatchObject({ ok: true, settingsApplied: 1 });
+    expect(settings.load().funnel.digestSize).toBe(9);
+    expect(settings.history()[0]).toMatchObject({ source: "web", changed: ["funnel.digestSize"] });
+    expect(await docs.list("owners/owner/settingsInbox")).toHaveLength(0);
+
+    await page.goto(base);
+    await page.waitForSelector(".rowi");
+    await page.click(".tabbar button >> nth=4");
+    await page.waitForSelector("#settings-remote");
+    expect(await page.locator("#settings-remote").innerText()).toContain("PC đã áp dụng thay đổi từ web");
+    expect(await page.locator("#settings-pending").count()).toBe(0);
+    expect(await page.inputValue("#c-funnel-digestSize")).toBe("9");
+    if (shots) await page.screenshot({ path: join(shots, "hosted-settings-applied.png") });
+    await ctx.close();
     expect(problems.filter((p) => !/Failed to load resource/.test(p))).toEqual([]);
   });
 });

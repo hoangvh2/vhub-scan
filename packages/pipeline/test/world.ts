@@ -35,6 +35,7 @@ export function world() {
 export const cfg = () => {
   const c = cfgWith();
   c.sources.github.queries = ["topic:productivity created:>{d14}"];
+  c.topics = []; // one search per run keeps the request counts below exact
   return c;
 };
 

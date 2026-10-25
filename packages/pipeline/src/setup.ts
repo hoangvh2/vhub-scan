@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import type { Home } from "./app.js";
-import type { Config } from "./config.js";
+import { searchQueries, type Config } from "./config.js";
 import type { RunStats } from "./pipeline.js";
 import type { FetchLike } from "./sources/http.js";
 
@@ -39,8 +39,8 @@ export function checkConfig(cfg: Config): SetupIssue[] {
       });
     }
   });
-  if (cfg.sources.github.enabled && cfg.sources.github.queries.length === 0 && cfg.sources.github.seeds.length === 0) {
-    out.push({ level: "warn", field: "sources.github", problem: "bật GitHub nhưng không có queries hay seeds nào", fix: "giữ các queries mẫu, hoặc thêm tên tài khoản GitHub vào seeds" });
+  if (cfg.sources.github.enabled && searchQueries(cfg).length === 0 && cfg.sources.github.seeds.length === 0) {
+    out.push({ level: "warn", field: "topics", problem: "bật GitHub nhưng không có chủ đề nào đang bật, không có query hay seeds nào", fix: "bật ít nhất 1 chủ đề trong trang Cài đặt của dashboard, hoặc thêm tên tài khoản GitHub vào seeds" });
   }
   return out;
 }
@@ -140,6 +140,9 @@ export function runSummary(st: RunStats): string {
   const dropped = Object.values(st.dropped).reduce((a, b) => a + b, 0);
   L.push(`Thu thập ${st.collected} mục (mới ${st.created}, gộp trùng ${st.merged}), loại bởi luật ${dropped}, Claude chấm ${st.triaged}, viết thẻ ${st.carded}.`);
   L.push(`Digest hôm nay: ${st.digest} ý tưởng. Claude: ${st.llmCalls} lần gọi, ${st.cacheHits} lần dùng lại cache, ${st.tokensToday} token hôm nay.`);
+  if (st.recheck && (st.recheck.dropped || st.recheck.revived)) {
+    L.push(`Luật lọc vừa đổi: áp dụng lại cho ý cũ, loại thêm ${st.recheck.dropped}, đưa lại ${st.recheck.revived}.`);
+  }
   for (const e of st.sourceErrors) L.push(`[LỖI] ${e}\n      cách sửa: ${explainSourceError(e)}`);
   for (const d of st.degraded) {
     if (d.endsWith(":budget")) L.push(`[chú ý] ${d}: hết ngân sách token hôm nay (budget.dailyTokens). Phần còn lại tự chạy tiếp ở lần sau`);
@@ -148,7 +151,7 @@ export function runSummary(st: RunStats): string {
     else L.push(`[chú ý] ${d}`);
   }
   if (st.digest > 0) L.push("\nXem kết quả:  npm run dashboard");
-  else if (!st.sourceErrors.length) L.push("\nHôm nay chưa có ý tưởng mới. Thử thêm seeds hoặc queries trong config, rồi npm run scan");
+  else if (!st.sourceErrors.length) L.push("\nHôm nay chưa có ý tưởng mới. Thử thêm chủ đề hoặc seeds trong trang Cài đặt của dashboard, rồi npm run scan");
   else L.push("\nSửa các dòng [LỖI] ở trên rồi chạy lại:  npm run scan");
   return L.join("\n");
 }

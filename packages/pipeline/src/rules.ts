@@ -20,6 +20,8 @@ export interface RuleContext {
   /** Stars (or points) gained per day, from observations. */
   velocity: number;
   isHn: boolean;
+  /** Re-checking items already in the funnel after the rules changed: age is judged only when an item first arrives. */
+  recheck?: boolean;
 }
 
 /** Deterministic hard filters. Returns the reason an item is dropped, or null to keep it. Costs no tokens. */
@@ -30,10 +32,15 @@ export function applyRules(e: EntityRow, ctx: RuleContext): string | null {
   const hay = textOf(e);
   for (const w of cfg.scope.exclude) if (hasTerm(hay, w)) return `out_of_scope:${w}`;
   if (e.user_state === "skipped") return "skipped_by_user";
-  if (e.created_at && !e.from_seed) {
+  if (e.created_at && !e.from_seed && !ctx.recheck) {
     const ageDays = (ctx.now.getTime() - Date.parse(e.created_at)) / 86_400_000;
     const maxAge = ctx.isHn ? cfg.rules.hnMaxAgeDays : cfg.rules.maxAgeDays;
     if (ageDays > maxAge && ctx.velocity < cfg.rules.minVelocityForOld) return "old";
   }
   return null;
+}
+
+/** Settings the hard filters depend on. When this changes, the next run re-checks items already filtered or dropped. */
+export function rulesFingerprint(cfg: Config): string {
+  return JSON.stringify([cfg.scope.exclude, cfg.scope.blockAuthors.map((a) => a.toLowerCase()).sort(), cfg.rules.minDescriptionChars]);
 }

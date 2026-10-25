@@ -80,7 +80,40 @@ describe("inbox", () => {
     await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), "owners/owner/inbox/evt_0123456789"), event));
   });
   it("everything outside /owners is closed", async () => {
+    await assertFails(setDoc(doc(phone(), "owners/owner/other/x1234567"), { a: 1 }));
     await assertFails(setDoc(doc(phone(), "anything/else"), { a: 1 }));
     await assertFails(getDoc(doc(phone(), "owners/owner")));
+  });
+});
+
+describe("settings inbox", () => {
+  const change = { patch: JSON.stringify({ "funnel.digestSize": 6 }), baseRev: "0123456789abcdef", at: 1792800000000, device: "Pixel 8" };
+  it("an allowlisted account can send a settings change", async () => {
+    await assertSucceeds(setDoc(doc(phone(), "owners/owner/settingsInbox/set_0123456789"), change));
+    await assertSucceeds(setDoc(doc(phone(), "owners/owner/settingsInbox/set_0123456780"), { patch: "{}", baseRev: "", at: 1 }));
+  });
+  it("rejects changes with a bad shape or size", async () => {
+    const bad: Record<string, unknown>[] = [
+      { ...change, patch: { "funnel.digestSize": 6 } },
+      { ...change, patch: "x".repeat(20001) },
+      { ...change, baseRev: "x".repeat(65) },
+      { ...change, at: "now" },
+      { ...change, device: "x".repeat(41) },
+      { ...change, extra: 1 },
+      { patch: "{}", at: 1 },
+    ];
+    for (const [i, d] of bad.entries()) await assertFails(setDoc(doc(phone(), `owners/owner/settingsInbox/set_bad_${i}_00`), d));
+    await assertFails(setDoc(doc(phone(), "owners/owner/settingsInbox/short"), change));
+  });
+  it("only allowlisted accounts can send, and nobody can read, change or delete what was sent", async () => {
+    await env.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), "owners/owner/settingsInbox/set_existing_1"), change);
+    });
+    await assertFails(setDoc(doc(env.authenticatedContext("u-x", google("mallory@example.com")).firestore(), "owners/owner/settingsInbox/set_0123456789"), change));
+    await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), "owners/owner/settingsInbox/set_0123456789"), change));
+    await assertFails(getDoc(doc(phone(), "owners/owner/settingsInbox/set_existing_1")));
+    await assertFails(getDocs(collection(phone(), "owners/owner/settingsInbox")));
+    await assertFails(updateDoc(doc(phone(), "owners/owner/settingsInbox/set_existing_1"), { patch: "{}" }));
+    await assertFails(deleteDoc(doc(phone(), "owners/owner/settingsInbox/set_existing_1")));
   });
 });

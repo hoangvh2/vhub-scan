@@ -32,5 +32,7 @@ object Icons {
     val Clock = icon("clock", "M13.5 8a5.5 5.5 0 1 1-11 0a5.5 5.5 0 1 1 11 0z", "M8 5v3.2l2 1.3")
     val Back = icon("back", "M10 3L5 8l5 5")
     val Phone = icon("phone", "M6 1.5h4a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 13V3A1.5 1.5 0 0 1 6 1.5z", "M7 12.2h2")
+    val Settings = icon("settings", "M2.5 4.5h6", "M11.5 4.5h2", "M2.5 11.5h2", "M7.5 11.5h6", "M11.5 4.5a1.5 1.5 0 1 1-3 0a1.5 1.5 0 1 1 3 0z", "M7.5 11.5a1.5 1.5 0 1 1-3 0a1.5 1.5 0 1 1 3 0z")
+    val Plus = icon("plus", "M8 3v10", "M3 8h10")
     val Scan = icon("scan", "M2.5 5.5v-3h3", "M10.5 2.5h3v3", "M13.5 10.5v3h-3", "M5.5 13.5h-3v-3", "M4.5 8h7")
 }

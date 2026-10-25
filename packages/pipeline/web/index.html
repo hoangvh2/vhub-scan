@@ -173,6 +173,72 @@ dialog.confirm .row{display:flex;justify-content:space-between;gap:10px}
 .alert{font-size:12.5px;border-radius:6px;padding:8px 10px;background:var(--warn-soft);color:var(--warn)}
 .alert.bad{background:color-mix(in srgb,var(--neg) 12%,transparent);color:var(--neg)}
 
+/* Settings view: full width like System; one panel per group, rows of label + help on the left, control on the right. */
+.set{padding:18px 18px 96px;display:grid;gap:14px;align-content:start;max-width:920px}
+.set .intro{display:grid;gap:8px}
+.set .est{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--ink2)}
+.set .est b{color:var(--ink);font-weight:600}
+.gnav{display:flex;gap:6px;flex-wrap:wrap;position:sticky;top:0;z-index:3;background:var(--bg);padding:6px 0}
+.chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:14px;border:1px solid var(--line2);background:var(--raised);font-size:12.5px;color:var(--ink2);white-space:nowrap}
+.chip:hover{border-color:var(--ink2)}
+.chip[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sgroup{background:var(--raised);border:1px solid var(--line);border-radius:var(--r);padding:4px 16px 8px;scroll-margin-top:48px}
+.sgroup>header{padding:12px 0 8px;display:grid;gap:2px}
+.sgroup>header h2{margin:0;font-size:15px}
+.sgroup>header p{margin:0;font-size:12.5px;color:var(--mute)}
+.srow{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,300px);gap:6px 20px;padding:12px 0;border-top:1px solid var(--line);align-items:start}
+.srow.wide{grid-template-columns:1fr}
+.srow .sl{display:grid;gap:3px;min-width:0}
+.srow label,.srow .lab{font-weight:600;font-size:13.5px}
+.srow .help{margin:0;font-size:12.5px;color:var(--ink2)}
+.srow .meta{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:12px;color:var(--mute)}
+.srow .meta button{all:unset;cursor:pointer;color:var(--accent);font-weight:600}
+.srow .meta button[hidden]{display:none}
+.srow .meta button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.srow .err{margin:0;font-size:12.5px;color:var(--neg)}
+.srow.changed{box-shadow:inset 3px 0 0 var(--accent);padding-left:10px;margin-left:-10px}
+.srow.bad label,.srow.bad .lab{color:var(--neg)}
+.badge{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.03em;padding:1px 6px;border-radius:9px;background:var(--bg);color:var(--mute);border:1px solid var(--line)}
+.badge.token{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.field{display:flex;align-items:center;gap:8px;width:100%}
+.field input,.field select,.topic input[type=text],.proj input{width:100%;min-width:0;height:34px;padding:0 10px;border:1px solid var(--line2);border-radius:6px;background:var(--raised);color:var(--ink);font:inherit}
+.srow textarea,.topic textarea,.proj textarea{height:auto;min-height:64px;padding:7px 10px;resize:vertical;line-height:1.45;width:100%;border:1px solid var(--line2);border-radius:6px;background:var(--raised);color:var(--ink);font:inherit}
+.field input:focus,.field select:focus,.srow textarea:focus,.topic input[type=text]:focus,.topic textarea:focus,.proj input:focus,.proj textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
+.field .unit{font-size:12.5px;color:var(--mute);white-space:nowrap}
+.ro{font-family:var(--mono);font-size:12.5px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 10px;overflow-wrap:anywhere}
+.switch{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--ink2)}
+.switch input{appearance:none;width:36px;height:20px;border-radius:10px;background:var(--line2);position:relative;cursor:pointer;margin:0;flex:none;transition:background .15s}
+.switch input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.switch input:checked{background:var(--pos)}
+.switch input:checked::after{transform:translateX(16px)}
+.switch input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.topics,.projs{display:grid;gap:10px}
+.topic,.proj{border:1px solid var(--line);border-radius:var(--r);padding:12px;display:grid;gap:8px;background:var(--surface)}
+.topic.off{opacity:.72}
+.topic .th,.proj .th{display:flex;align-items:center;gap:10px}
+.topic .th input[type=text],.proj .th input{flex:1;font-weight:600}
+.topic .sub{font-size:12px;color:var(--mute)}
+.topic .tq{display:grid;gap:4px;align-content:start}
+.topic .tb{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:10px}
+.topic textarea{min-height:36px}
+.topic .tq .lbl{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:24px}
+.topic .tq small,.proj small{font-size:12px;color:var(--mute)}
+.tries{display:grid;gap:4px;font-size:12.5px;color:var(--ink2)}
+.tries code{font-family:var(--mono);font-size:11.5px;color:var(--mute)}
+.btn.link{border-color:transparent;background:transparent;color:var(--neg);padding:0 6px}
+.btn.link:hover{background:var(--bg)}
+.savebar{position:fixed;left:232px;right:0;bottom:0;z-index:8;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 18px calc(10px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line2);box-shadow:0 -8px 24px -16px rgba(0,0,0,.35)}
+.savebar[hidden]{display:none}
+.savebar .txt{display:grid;gap:1px;font-size:12.5px;color:var(--ink2);min-width:0;flex:1}
+.savebar .txt b{color:var(--ink);font-size:13.5px}
+.hist{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.hist li{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;font-size:13px}
+.hist li small{grid-column:1;color:var(--mute);font-size:12px}
+.hist li .btn{grid-row:1/3;grid-column:2}
+.cats{display:flex;gap:6px;overflow-x:auto;padding:2px 0 2px;scrollbar-width:none}
+.cats::-webkit-scrollbar{display:none}
+.rowi .m .cat{color:var(--ink2)}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:8px;padding:8px 8px 8px 14px;display:flex;gap:12px;align-items:center;box-shadow:var(--shadow);transition:opacity .15s,transform .15s;z-index:20;max-width:calc(100vw - 32px)}
 #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 #toast button{all:unset;cursor:pointer;color:var(--accent-soft);font-weight:600;padding:4px 8px;border-radius:4px}
@@ -184,6 +250,7 @@ dialog.confirm .row{display:flex;justify-content:space-between;gap:10px}
 .keys kbd{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:3px;padding:0 4px;color:var(--ink2)}
 .tabbar,.topbar{display:none}
 .app.is-system .list{grid-column:2/4;border-right:0}
+@media (max-width:1180px){.savebar{left:64px}}
 .app.is-system .detail{display:none}
 
 /* Medium: rail collapses to icons. */
@@ -226,14 +293,27 @@ dialog.confirm .row{display:flex;justify-content:space-between;gap:10px}
   .acts .sp{display:none}
   .sys{padding:14px 16px}
   .tiles{grid-template-columns:1fr 1fr 1fr;gap:8px}.tile{padding:10px}.tile b{font-size:16px}
-  .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  .set{padding:14px 16px 120px}
+  .gnav{top:calc(53px + env(safe-area-inset-top));margin:0 -16px;padding:6px 16px;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+  .gnav::-webkit-scrollbar{display:none}
+  .sgroup{padding:2px 12px 6px;scroll-margin-top:110px}
+  .srow{grid-template-columns:1fr;gap:8px}
+  .topic .tb{grid-template-columns:1fr}
+  .srow.changed{padding-left:8px;margin-left:-8px}
+  .field input,.field select,.topic input[type=text],.proj input{height:40px;font-size:16px}
+  .srow textarea,.topic textarea,.proj textarea{font-size:16px}
+  .savebar{left:0;bottom:calc(57px + env(safe-area-inset-bottom));padding:10px 16px}
+  .savebar .btn{height:40px}
+  .tabbar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
   .tabbar button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:2px;padding:8px 0 7px;font-size:11.5px;color:var(--mute)}
   .tabbar button svg{width:20px;height:20px}
   .tabbar button[aria-selected=true]{color:var(--ink);font-weight:600}
   .tabbar button[aria-selected=true] svg{color:var(--accent)}
   #toast{bottom:calc(72px + env(safe-area-inset-bottom))}
   body.sheet #toast{bottom:calc(72px + env(safe-area-inset-bottom))}
+  body.dirty #toast{bottom:calc(132px + env(safe-area-inset-bottom))}
 }
+body.dirty #toast{bottom:calc(76px + env(safe-area-inset-bottom))}
 @media (prefers-reduced-motion:reduce){.detail{transition:none}}
 .hosted #runnow, .hosted #runnow2 { display: none; }
 </style>
@@ -244,6 +324,8 @@ dialog.confirm .row{display:flex;justify-content:space-between;gap:10px}
   <symbol id="i-kept" viewBox="0 0 16 16"><path d="M4 2.5h8v11l-4-2.8-4 2.8z"/></symbol>
   <symbol id="i-explore" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></symbol>
   <symbol id="i-system" viewBox="0 0 16 16"><path d="M2 12.5h12M4 12.5V8M8 12.5V3.5M12 12.5V6"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 16 16"><path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"/><circle cx="10" cy="4.5" r="1.5"/><circle cx="6" cy="11.5" r="1.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
   <symbol id="i-run" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8"/></symbol>
   <symbol id="i-out" viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v3.5a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V5a.5.5 0 0 1 .5-.5h3.5"/></symbol>
   <symbol id="i-check" viewBox="0 0 16 16"><path d="m3 8.5 3.2 3L13 4.5"/></symbol>
@@ -257,7 +339,7 @@ dialog.confirm .row{display:flex;justify-content:space-between;gap:10px}
   <aside class="rail" aria-label="Điều hướng">
     <div class="brand"><b>VHub Trend</b><span>Scan</span></div>
     <nav class="nav" id="nav" role="tablist" aria-label="Màn hình"></nav>
-    <details class="keyhelp"><summary>Phím tắt</summary><dl class="keys" aria-label="Phím tắt"><dt><kbd>J</kbd> <kbd>K</kbd></dt><dd>lên, xuống</dd><dt><kbd>E</kbd> <kbd>X</kbd> <kbd>S</kbd></dt><dd>giữ, bỏ, hoãn</dd><dt><kbd>O</kbd></dt><dd>mở trang gốc</dd><dt><kbd>/</kbd></dt><dd>tìm</dd><dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>đổi màn hình</dd></dl></details>
+    <details class="keyhelp"><summary>Phím tắt</summary><dl class="keys" aria-label="Phím tắt"><dt><kbd>J</kbd> <kbd>K</kbd></dt><dd>lên, xuống</dd><dt><kbd>E</kbd> <kbd>X</kbd> <kbd>S</kbd></dt><dd>giữ, bỏ, hoãn</dd><dt><kbd>O</kbd></dt><dd>mở trang gốc</dd><dt><kbd>/</kbd></dt><dd>tìm</dd><dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>đổi màn hình</dd></dl></details>
     <div class="status" id="status"></div>
   </aside>
 
@@ -270,6 +352,7 @@ dialog.confirm .row{display:flex;justify-content:space-between;gap:10px}
   <section class="pane list" aria-labelledby="ptitle">
     <div class="phead">
       <div><h1 id="ptitle">Hôm nay</h1><div class="sub" id="psub"></div></div>
+      <div class="cats" id="cats" role="group" aria-label="Lọc theo chủ đề" hidden></div>
       <label class="search" id="searchbox" hidden><svg class="i" aria-hidden="true"><use href="#i-explore"/></svg><span class="sr">Tìm</span><input id="q" type="search" placeholder="Tìm theo tên, mô tả, chủ đề" autocomplete="off"></label>
     </div>
     <div class="scroll" id="listview" aria-live="polite"></div>
@@ -283,6 +366,7 @@ dialog.confirm .row{display:flex;justify-content:space-between;gap:10px}
 
   <nav class="tabbar" id="tabbar" role="tablist" aria-label="Màn hình"></nav>
 </div>
+<div class="savebar" id="savebar" role="region" aria-label="Thay đổi chưa lưu" hidden></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -293,10 +377,15 @@ const TABS = [
   { k: "kept", t: "Đã giữ", icon: "kept" },
   { k: "explore", t: "Khám phá", icon: "explore" },
   { k: "system", t: "Hệ thống", icon: "system" },
+  { k: "settings", t: "Cài đặt", icon: "gear" },
 ];
+const WIDE = (tab) => tab === "system" || tab === "settings";
 const STATE_LABEL = { new: "Mới", kept: "Đã giữ", skipped: "Đã bỏ", snoozed: "Đang hoãn", trying: "Đang thử", done: "Xong" };
 const EFFORT = { S: ["Nhỏ", 1], M: ["Vừa", 2], L: ["Lớn", 3] };
-const ui = { tab: "today", items: [], sel: 0, health: null, detail: null, loading: true, error: null };
+const ui = { tab: "today", items: [], sel: 0, health: null, detail: null, loading: true, error: null, cat: "" };
+/* Category id -> label: topics from the settings, plus labels of categories from before topics existed. */
+const LEGACY_CATS = { "work-tool": "Công việc", "life-tool": "Đời sống", "dev-tool": "Công cụ lập trình", "ai-agent": "AI agent", automation: "Tự động hoá", other: "Khác" };
+const catLabel = (id) => { if (!id) return null; const c = ui.health && ui.health.categories && ui.health.categories.find((x) => x.id === id); return c ? c.label : LEGACY_CATS[id] || id; };
 const phone = matchMedia("(max-width: 820px)");
 
 // Two ways to run this page. On the PC (`npm run dashboard`) it talks to the local server with a token. Hosted on
@@ -422,19 +511,42 @@ const cloud = {
     store.set("vhOverlay", [...(store.get("vhOverlay") || []).filter((o) => o.id !== id), { id, state: ACTION_STATE[action] || "new", at }]);
     return { ok: true };
   },
+  /** A settings change: only the edited settings, as JSON. The PC validates and applies it on its next sync (docs/SYNC.md). */
+  async sendSettings(patch, baseRev) {
+    const idt = await this.idToken();
+    const id = "set" + crypto.randomUUID().replace(/-/g, "");
+    const at = Date.now();
+    const fields = { patch: { stringValue: JSON.stringify(patch) }, baseRev: { stringValue: baseRev || "" }, at: { integerValue: String(at) }, device: { stringValue: "web" } };
+    const r = await fetch(`${this.docs()}/settingsInbox?documentId=${id}`, { method: "POST", headers: { authorization: "Bearer " + idt, "content-type": "application/json" }, body: JSON.stringify({ fields }) });
+    if (!r.ok && r.status !== 409) throw new Error(r.status === 403 ? "Cloud từ chối thay đổi này (quá lớn hoặc sai định dạng)." : "Cloud trả lỗi " + r.status);
+    store.set("vhSettingsPending", { id, at, patch });
+    return { ok: true, pending: true };
+  },
+  /** The settings form from the snapshot, with a change that the PC has not applied yet shown on top. */
+  settingsPage() {
+    const st = this.snap.settings;
+    if (!st) throw new Error("PC chưa gửi cài đặt lên cloud. Cập nhật pipeline trên PC rồi chạy: npm run sync");
+    let pending = store.get("vhSettingsPending");
+    if (pending && st.remote && st.remote.id === pending.id) { store.set("vhSettingsPending", null); pending = null; }
+    const values = pending ? { ...st.values, ...pending.patch } : st.values;
+    return { ...st, values, pending, history: [], canTestQuery: false, cloud: true };
+  },
 };
 async function cloudApi(path, opt) {
   if (!cloud.session) throw new AuthError("Đăng nhập bằng Google để xem.");
   const u = new URL(path, "http://x");
   if (opt.method === "POST") {
     if (u.pathname === "/api/feedback") { const b = JSON.parse(opt.body); await cloud.snapshot(); return cloud.send(b.id, b.action, b.days); }
+    if (u.pathname === "/api/settings") { const b = JSON.parse(opt.body); await cloud.snapshot(); return cloud.sendSettings(b.patch, b.baseRev); }
+    if (u.pathname.startsWith("/api/settings/")) throw new Error("Chỉ làm được trên dashboard của PC.");
     return { started: false, reason: "chạy quét trên PC" };
   }
-  await cloud.snapshot();
+  await cloud.snapshot(u.pathname === "/api/settings");
   const v = cloud.view(), q = (u.searchParams.get("q") || "").trim().toLowerCase();
+  if (u.pathname === "/api/settings") return cloud.settingsPage();
   if (u.pathname === "/api/health") {
     const h = v.s.health, lr = h.lastRun;
-    return { lastRun: lr && { started_at: lr.startedAt, finished_at: lr.finishedAt, status: lr.status, error: lr.error, stats: lr }, tokens: { inTokens: h.tokens.used, outTokens: 0, limit: h.tokens.limit, calls: h.tokens.calls, costUsd: h.tokens.costUsd }, userStates: h.counts, digestCount: v.digest.length, cloud: { projectId: CFG.p, syncMinutes: null, last: { at: v.s.generatedAt, ok: true, applied: 0 } } };
+    return { lastRun: lr && { started_at: lr.startedAt, finished_at: lr.finishedAt, status: lr.status, error: lr.error, stats: lr }, tokens: { inTokens: h.tokens.used, outTokens: 0, limit: h.tokens.limit, calls: h.tokens.calls, costUsd: h.tokens.costUsd }, userStates: h.counts, digestCount: v.digest.length, categories: v.s.settings ? v.s.settings.categories : null, cloud: { projectId: CFG.p, syncMinutes: null, last: { at: v.s.generatedAt, ok: true, applied: 0 } } };
   }
   if (u.pathname === "/api/digest") return { day: v.s.day, items: v.digest };
   if (u.pathname === "/api/entities") {
@@ -442,6 +554,8 @@ async function cloudApi(path, opt) {
     let items = st === "kept" ? v.kept.filter((x) => x.userState === "kept") : st === "trying" ? v.kept.filter((x) => x.userState === "trying") : [...v.known.values()].filter((x) => x.userState !== "skipped" && x.userState !== "done");
     if (q) items = items.filter((x) => (x.title + " " + (x.description || "") + " " + (x.topics || []).join(" ")).toLowerCase().includes(q));
     else if (!st) items = v.explore;
+    const cat = u.searchParams.get("cat");
+    if (cat) items = items.filter((x) => x.triage.cat === cat);
     return { items: items.slice(0, lim) };
   }
   if (u.pathname === "/api/entity") {
@@ -568,7 +682,7 @@ function row(it, i) {
     h("div", { class: "t" }, it.title),
     h("div", { class: "delta num" }, m ? [h("b", {}, compact.format(m.v)), " ", m.u] : null),
     h("div", { class: "w" }, it.triage.why || it.description),
-    h("div", { class: "m" }, it.userState !== "new" && h("span", { class: "st " + it.userState }, STATE_LABEL[it.userState] || it.userState)));
+    h("div", { class: "m" }, it.userState !== "new" && h("span", { class: "st " + it.userState }, STATE_LABEL[it.userState] || it.userState), it.triage.cat && h("span", { class: "cat" }, catLabel(it.triage.cat))));
 }
 function skeleton() { return h("ul", { class: "sk", "aria-busy": "true", "aria-label": "Đang tải" }, [0, 1, 2, 3, 4].map((i) => h("li", {}, h("i", { style: `width:${55 + (i * 13) % 35}%` }), h("i", { style: "width:92%" }), h("i", { style: "width:40%" })))); }
 function empty(title, text, extra) { return h("div", { class: "empty" }, h("h3", {}, title), h("p", {}, text), extra || null); }
@@ -577,7 +691,9 @@ function renderList() {
   const v = $("#listview"); const tab = TABS.find((t) => t.k === ui.tab);
   $("#ptitle").textContent = tab.t;
   $("#searchbox").hidden = ui.tab !== "explore";
-  $("#app").classList.toggle("is-system", ui.tab === "system");
+  $("#app").classList.toggle("is-system", WIDE(ui.tab));
+  renderCats();
+  if (ui.tab !== "settings") renderSavebar();
   if (ui.error) {
     v.replaceChildren(ui.error instanceof AuthError && CLOUD
       ? signInCard(ui.error.message)
@@ -586,8 +702,9 @@ function renderList() {
       : empty("Không tải được dữ liệu", (CLOUD ? "" : "Kiểm tra cửa sổ terminal đang chạy dashboard còn mở không. ") + ui.error.message, h("button", { class: "btn", onclick: () => load() }, "Thử lại")));
     $("#psub").textContent = ""; return;
   }
-  if (ui.loading && !ui.items.length && ui.tab !== "system") { v.replaceChildren(skeleton()); return; }
+  if (ui.loading && !ui.items.length && !WIDE(ui.tab)) { v.replaceChildren(skeleton()); return; }
   if (ui.tab === "system") return renderSystem(v);
+  if (ui.tab === "settings") return renderSettings(v);
   const sub = ui.tab === "today" ? (ui.day ? `${dayLabel(ui.day)} · ${ui.items.length} ý` : "") : ui.tab === "kept" ? `${ui.items.length} ý đang giữ hoặc đang thử` : $("#q").value ? `${ui.items.length} kết quả` : "Ý đã phân tích, xếp theo điểm";
   $("#psub").textContent = sub;
   if (!ui.items.length) {
@@ -630,10 +747,10 @@ addEventListener("popstate", () => document.body.classList.remove("sheet"));
 
 async function renderDetail() {
   const v = $("#detailview"); const acts = $("#acts");
-  const it = ui.tab === "system" ? null : ui.items[ui.sel];
+  const it = WIDE(ui.tab) ? null : ui.items[ui.sel];
   if (!it) {
     acts.hidden = true;
-    v.replaceChildren(ui.tab === "system" ? h("div") : empty("Chọn một ý để xem chi tiết", "Dùng J/K để đi qua danh sách, E để giữ, X để bỏ."));
+    v.replaceChildren(WIDE(ui.tab) ? h("div") : empty("Chọn một ý để xem chi tiết", "Dùng J/K để đi qua danh sách, E để giữ, X để bỏ."));
     return;
   }
   const c = it.card; const m = metricOf(it); const href = safeHref(it.url); const eff = c && (EFFORT[c.effort] || [c.effort, 0]);
@@ -651,6 +768,7 @@ async function renderDetail() {
       h("div", { class: "glance num" },
         it.triage.score != null && h("span", {}, "Điểm ", h("b", {}, it.triage.score + "/3")),
         m && h("span", {}, h("b", {}, compact.format(m.v)), " " + m.u),
+        it.triage.cat && h("span", {}, "Chủ đề ", h("b", {}, catLabel(it.triage.cat))),
         eff && h("span", {}, h("span", { class: "effort", "aria-hidden": "true" }, [1, 2, 3].map((k) => h("i", { class: eff[1] >= k ? "on" : "" }))), "Nỗ lực " + String(eff[0]).toLowerCase()),
         it.userState !== "new" && h("b", {}, STATE_LABEL[it.userState]))),
     it.triage.why && h("div", { class: "why" }, it.triage.why),
@@ -744,6 +862,290 @@ async function renderSystem(v) {
   renderDetail();
 }
 
+/* ---------- settings ---------- */
+// One form for the PC (reads and writes config.json through /api/settings) and the hosted page (reads the snapshot,
+// sends the change to the PC through the cloud). The catalogue (labels, help, limits) comes from the PC, so the
+// page never has its own copy of what a setting means.
+const S = { page: null, draft: {}, errors: {}, preview: null, saving: false, tries: {}, problem: null };
+const SOURCE_LABEL = { pc: "PC", phone: "điện thoại", web: "web", restore: "khôi phục" };
+const IMPACT_LABEL = { token: "tốn token", time: "thời gian quét", quality: "chất lượng" };
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const fmtK = (n) => n >= 1000 ? "~" + fmt.format(Math.round(n / 1000)) + "k" : fmt.format(n);
+function dirtyCount() { return Object.keys(S.draft).length; }
+const valueOf = (key) => (key in S.draft ? S.draft[key] : S.page.values[key]);
+const defOf = (key) => S.page.defs.find((d) => d.key === key);
+/** Read-only here: only config.json may change it, or only the PC page may (on the hosted page). */
+const lockedReason = (d) => d.editable === false ? "Chỉ sửa trong config.json trên PC." : CLOUD && d.remote === false ? "Chỉ sửa trên dashboard của PC." : null;
+
+async function loadSettings() {
+  try { S.page = await api("/api/settings"); S.problem = null; }
+  catch (e) { if (e instanceof AuthError) throw e; S.problem = e.message; }
+}
+
+function setValue(key, v) {
+  if (same(v, S.page.values[key])) delete S.draft[key]; else S.draft[key] = v;
+  const def = defOf(key);
+  const p = checkValue(def, v);
+  if (p) S.errors[key] = p; else delete S.errors[key];
+  markRow(key); renderSavebar(); schedulePreview();
+}
+function markRow(key) {
+  const row = document.getElementById("s-" + key.replace(/\./g, "-")); if (!row) return;
+  row.classList.toggle("changed", key in S.draft);
+  row.classList.toggle("bad", !!S.errors[key]);
+  const err = row.querySelector(".err"); if (err) { err.textContent = S.errors[key] || ""; err.hidden = !S.errors[key]; }
+  const reset = row.querySelector("[data-reset]"); if (reset) reset.hidden = same(valueOf(key), S.page.defaults[key]);
+}
+/** Same limits the PC enforces (it checks again; this only gives feedback while typing). */
+function checkValue(d, v) {
+  if (d.type === "int" || d.type === "number") {
+    if (typeof v !== "number" || !Number.isFinite(v)) return "phải là số";
+    if (d.type === "int" && !Number.isInteger(v)) return "phải là số nguyên";
+    if (d.min != null && v < d.min) return "nhỏ nhất là " + d.min;
+    if (d.max != null && v > d.max) return "lớn nhất là " + d.max;
+  }
+  if (d.type === "text" && !String(v).trim()) return "không được để trống";
+  if (d.type === "topics") {
+    const ids = new Set();
+    for (const [i, t] of v.entries()) {
+      if (!t.label.trim()) return `chủ đề ${i + 1}: cần tên`;
+      if (ids.has(t.id)) return `chủ đề "${t.label}": trùng mã với chủ đề khác, đổi tên khác`;
+      ids.add(t.id);
+    }
+  }
+  if (d.type === "projects") for (const [i, p] of v.entries()) if (!p.name.trim() || !p.summary.trim()) return `dự án ${i + 1}: cần tên và mô tả`;
+  return null;
+}
+function slug(label) {
+  return label.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "d").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32).replace(/-+$/, "") || "chu-de";
+}
+const lines = (txt) => txt.split("\n").map((x) => x.trim()).filter(Boolean);
+const commas = (txt) => txt.split(",").map((x) => x.trim()).filter(Boolean);
+
+function schedulePreview() {
+  clearTimeout(schedulePreview.t);
+  if (CLOUD || !dirtyCount() || Object.keys(S.errors).length) { S.preview = null; renderSavebar(); return; }
+  schedulePreview.t = setTimeout(async () => {
+    try {
+      const r = await fetch("/api/settings/preview", { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" }, body: JSON.stringify({ patch: S.draft }) });
+      const j = await r.json();
+      S.preview = r.ok ? j : null;
+      if (!r.ok && j.errors) for (const e of j.errors) { S.errors[e.key] = e.problem; markRow(e.key); }
+    } catch { S.preview = null; }
+    renderSavebar();
+  }, 350);
+}
+
+function renderSavebar() {
+  const bar = $("#savebar"); const n = ui.tab === "settings" && S.page ? dirtyCount() : 0;
+  document.body.classList.toggle("dirty", n > 0);
+  if (!n) { bar.hidden = true; bar.replaceChildren(); return; }
+  const bad = Object.keys(S.errors).length;
+  const p = S.preview;
+  const detail = bad ? `${bad} mục chưa hợp lệ, sửa chỗ tô đỏ rồi lưu.`
+    : CLOUD ? "Gửi về PC; PC kiểm tra và áp dụng ở lần đồng bộ kế tiếp."
+    : p ? [`Ước tính mỗi lần quét: ${fmtK(p.before.tokens)} → ${fmtK(p.after.tokens)} token`, p.recheck.dropped || p.recheck.revived ? ` · lần quét sau loại thêm ${p.recheck.dropped} ý, đưa lại ${p.recheck.revived} ý đã thấy` : ""].join("")
+    : "Áp dụng từ lần quét sau.";
+  bar.hidden = false;
+  bar.replaceChildren(
+    h("div", { class: "txt" }, h("b", {}, `${n} thay đổi chưa lưu`), h("span", { id: "save-detail" }, detail)),
+    h("button", { class: "btn", id: "discard", onclick: () => { S.draft = {}; S.errors = {}; S.preview = null; renderList(); } }, "Bỏ thay đổi"),
+    h("button", { class: "btn primary", id: "save", disabled: bad > 0 || S.saving, onclick: saveSettings }, S.saving ? "Đang lưu…" : CLOUD ? "Gửi về PC" : "Lưu"));
+}
+
+async function saveSettings() {
+  if (S.saving || Object.keys(S.errors).length) return;
+  S.saving = true; renderSavebar();
+  try {
+    if (CLOUD) {
+      await api("/api/settings", { method: "POST", body: JSON.stringify({ patch: S.draft, baseRev: S.page.rev }) });
+      S.draft = {}; S.errors = {};
+      await loadSettings();
+      toast("Đã gửi. PC áp dụng ở lần đồng bộ kế tiếp.");
+    } else {
+      const r = await fetch("/api/settings", { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" }, body: JSON.stringify({ patch: S.draft, baseRev: S.page.rev }) });
+      if (r.status === 401) throw new AuthError("Trình duyệt này chưa có mã truy cập.");
+      const j = await r.json();
+      if (r.status === 409) { S.problem = null; toast("Cài đặt vừa được đổi ở nơi khác. Đã tải bản mới; thay đổi của bạn vẫn còn, kiểm tra rồi lưu lại."); S.page = j.view; for (const k of Object.keys(S.draft)) if (same(S.draft[k], S.page.values[k])) delete S.draft[k]; }
+      else if (!r.ok) { for (const e of j.errors || []) S.errors[e.key || "_"] = e.problem; toast("Chưa lưu: " + (j.errors || []).map((e) => (defOf(e.key) ? defOf(e.key).label + ": " : "") + e.problem).join("; ")); }
+      else {
+        S.page = j.view; S.draft = {}; S.errors = {}; S.preview = null;
+        const id = j.entry && j.entry.id;
+        toast(j.changed.length ? `Đã lưu ${j.changed.length} cài đặt. Áp dụng từ lần quét sau.` : "Không có gì thay đổi.", id ? () => restoreSettings(id, true) : null);
+      }
+    }
+  } catch (e) { if (e instanceof AuthError) { ui.error = e; } toast("Chưa lưu được: " + e.message); }
+  S.saving = false;
+  ui.health && (ui.health.categories = S.page && S.page.categories);
+  renderList();
+}
+
+async function restoreSettings(id, quiet) {
+  if (!quiet && !(await confirmDialog("Trả cài đặt về trước lần đổi này?", "Mọi cài đặt sẽ về như ngay trước lần đổi đó. Việc khôi phục cũng được ghi vào nhật ký nên có thể hoàn tác.", "Khôi phục"))) return;
+  try {
+    const r = await fetch("/api/settings/restore", { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" }, body: JSON.stringify({ id }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error((j.errors || []).map((e) => e.problem).join("; ") || "lỗi " + r.status);
+    S.page = j.view; S.draft = {}; S.errors = {};
+    toast("Đã khôi phục cài đặt.");
+  } catch (e) { toast("Chưa khôi phục được: " + e.message); }
+  renderList();
+}
+
+async function tryQueries(topicIdx, queries) {
+  S.tries[topicIdx] = queries.map((q) => ({ q, text: "đang hỏi GitHub…" }));
+  rerenderTopics();
+  for (const [i, q] of queries.entries()) {
+    try {
+      const r = await fetch("/api/settings/test-query", { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" }, body: JSON.stringify({ query: q }) });
+      const j = await r.json();
+      S.tries[topicIdx][i].text = r.ok ? `${fmt.format(j.total)} repo khớp. Nhiều sao nhất: ${j.items.slice(0, 3).map((x) => `${x.name} (${compact.format(x.stars)} sao)`).join(", ") || "không có"}` : "Lỗi: " + (j.error || r.status);
+    } catch (e) { S.tries[topicIdx][i].text = "Lỗi: " + e.message; }
+    rerenderTopics();
+  }
+}
+
+/* --- controls --- */
+function control(d) {
+  const id = "c-" + d.key.replace(/\./g, "-"); const v = valueOf(d.key); const locked = lockedReason(d);
+  if (locked) return h("div", { class: "ro", id }, Array.isArray(v) ? v.join(", ") || "(trống)" : String(v === "" ? "(để CLI tự chọn)" : v));
+  switch (d.type) {
+    case "bool": return h("label", { class: "switch" }, h("input", { type: "checkbox", role: "switch", id, checked: !!v, onchange: (e) => setValue(d.key, e.target.checked) }), v ? "Bật" : "Tắt");
+    case "int": case "number": return h("div", { class: "field" },
+      h("input", { type: "number", id, inputmode: d.type === "int" ? "numeric" : "decimal", min: d.min, max: d.max, step: d.step || (d.type === "int" ? 1 : "any"), value: String(v),
+        oninput: (e) => setValue(d.key, e.target.value === "" ? NaN : Number(e.target.value)) }),
+      d.unit && h("span", { class: "unit" }, d.unit));
+    case "choice": {
+      const opts = [...d.options]; if (!opts.some((o) => o.value === v)) opts.push({ value: v, label: v });
+      return h("div", { class: "field" }, h("select", { id, onchange: (e) => setValue(d.key, e.target.value) }, opts.map((o) => h("option", { value: o.value, selected: o.value === v }, o.label))));
+    }
+    case "text": return h("textarea", { id, rows: 3, maxlength: d.maxLen || 600, oninput: (e) => setValue(d.key, e.target.value) }, v);
+    case "list": return h("textarea", { id, rows: Math.min(8, Math.max(3, v.length + 1)), placeholder: "Mỗi dòng một mục", oninput: (e) => setValue(d.key, lines(e.target.value)) }, v.join("\n"));
+    case "topics": return h("div", { class: "topics", id: "topics" }, topicCards(d));
+    case "projects": return h("div", { class: "projs", id: "projects" }, projectCards(d));
+  }
+  return h("div", { class: "ro" }, JSON.stringify(v));
+}
+function rerenderTopics() { const box = $("#topics"); if (box) box.replaceChildren(...topicCards(defOf("topics"))); }
+function topicCards(d) {
+  const list = valueOf("topics"); const saved = new Set(S.page.values.topics.map((t) => t.id));
+  const put = (i, patch) => { const next = list.map((t, j) => (j === i ? { ...t, ...patch } : t)); setValue("topics", next); };
+  const cards = list.map((t, i) => h("div", { class: "topic" + (t.enabled ? "" : " off"), "data-topic": t.id },
+    h("div", { class: "th" },
+      h("label", { class: "switch", title: t.enabled ? "Đang quét chủ đề này" : "Đang tắt" }, h("input", { type: "checkbox", role: "switch", "aria-label": "Bật chủ đề " + (t.label || ""), checked: t.enabled, onchange: (e) => { put(i, { enabled: e.target.checked }); rerenderTopics(); } })),
+      h("input", { type: "text", "aria-label": "Tên chủ đề", placeholder: "Tên chủ đề, ví dụ: Tài chính cá nhân", value: t.label, maxlength: 40,
+        // A new topic's id follows its name until it is saved; after that it stays, so earlier items keep their label.
+        oninput: (e) => put(i, saved.has(t.id) ? { label: e.target.value } : { label: e.target.value, id: slug(e.target.value) }) }),
+      h("button", { class: "btn sm link", "data-del": t.id, onclick: async () => {
+        if (await confirmDialog(`Xoá chủ đề "${t.label || "chưa đặt tên"}"?`, "Pipeline sẽ không quét các query của chủ đề này nữa. Ý đã thu thập vẫn giữ nguyên. Thay đổi chỉ có hiệu lực khi bạn bấm Lưu.", "Xoá")) {
+          setValue("topics", list.filter((_, j) => j !== i)); delete S.tries[i]; rerenderTopics();
+        } } }, "Xoá")),
+    h("div", { class: "tb" },
+      h("div", { class: "tq" },
+        h("div", { class: "lbl" }, h("small", {}, "Query GitHub, mỗi dòng một query ({d14} = 14 ngày trước)"),
+          S.page.canTestQuery && t.queries.length ? h("button", { class: "btn sm", onclick: () => tryQueries(i, t.queries) }, "Thử trên GitHub") : null),
+        h("textarea", { rows: Math.max(2, t.queries.length + (phone.matches ? 1 : 0)), "aria-label": "Query GitHub của " + (t.label || "chủ đề"), placeholder: "topic:personal-finance created:>{d14} stars:>=5", oninput: (e) => put(i, { queries: lines(e.target.value) }) }, t.queries.join("\n")),
+        S.tries[i] ? h("div", { class: "tries" }, S.tries[i].map((x) => h("div", {}, h("code", {}, x.q), " ", x.text))) : null),
+      h("div", { class: "tq" },
+        h("div", { class: "lbl" }, h("small", {}, "Từ khoá ưu tiên, cách nhau bằng dấu phẩy")),
+        h("input", { type: "text", "aria-label": "Từ khoá của " + (t.label || "chủ đề"), value: t.keywords.join(", "), placeholder: "budget, expense, finance", onchange: (e) => put(i, { keywords: commas(e.target.value) }) }))),
+    h("div", { class: "sub" }, "Mã: ", h("code", {}, t.id), saved.has(t.id) ? "" : " (mới, đặt theo tên)")));
+  if (list.length < (d.maxLen || 20)) cards.push(h("button", { class: "btn", id: "add-topic", style: "justify-self:start", onclick: () => {
+    let n = list.length + 1; while (list.some((t) => t.id === "chu-de-" + n)) n++;
+    setValue("topics", [...list, { id: "chu-de-" + n, label: "", enabled: true, queries: [], keywords: [] }]); rerenderTopics();
+    const inputs = document.querySelectorAll("#topics .topic .th input[type=text]"); inputs[inputs.length - 1]?.focus();
+  } }, icon("plus"), "Thêm chủ đề"));
+  return cards;
+}
+function rerenderProjects() { const box = $("#projects"); if (box) box.replaceChildren(...projectCards(defOf("projects"))); }
+function projectCards(d) {
+  const list = valueOf("projects");
+  const put = (i, patch) => setValue("projects", list.map((p, j) => (j === i ? { ...p, ...patch } : p)));
+  const cards = list.map((p, i) => h("div", { class: "proj" },
+    h("div", { class: "th" }, h("input", { type: "text", "aria-label": "Tên dự án", value: p.name, maxlength: 40, placeholder: "Tên dự án", oninput: (e) => put(i, { name: e.target.value }) }),
+      h("button", { class: "btn sm link", onclick: async () => {
+        if (await confirmDialog(`Xoá dự án "${p.name || "chưa đặt tên"}"?`, "Thẻ ý tưởng mới sẽ không gợi ý cách áp dụng vào dự án này nữa. Thay đổi chỉ có hiệu lực khi bạn bấm Lưu.", "Xoá")) { setValue("projects", list.filter((_, j) => j !== i)); rerenderProjects(); }
+      } }, "Xoá")),
+    h("textarea", { rows: 2, maxlength: 300, "aria-label": "Mô tả " + (p.name || "dự án"), placeholder: "1–2 câu: dự án làm gì, cho ai", oninput: (e) => put(i, { summary: e.target.value }) }, p.summary)));
+  if (list.length < (d.maxLen || 10)) cards.push(h("button", { class: "btn", style: "justify-self:start", onclick: () => { setValue("projects", [...list, { name: "", summary: "" }]); rerenderProjects(); } }, icon("plus"), "Thêm dự án"));
+  return cards;
+}
+function fmtValue(d, v) {
+  if (d.type === "bool") return v ? "bật" : "tắt";
+  if (d.type === "choice") { const o = d.options.find((x) => x.value === v); return o ? o.label : v; }
+  if (d.type === "list") return v.length ? v.length + " mục" : "trống";
+  if (d.type === "topics") return v.map((t) => t.label).join(", ");
+  if (d.type === "projects") return v.length + " dự án";
+  if (d.type === "text") return v.length > 40 ? v.slice(0, 40) + "…" : v;
+  return fmt.format(v) + (d.unit ? " " + d.unit : "");
+}
+function settingRow(d) {
+  const wide = d.type === "topics" || d.type === "projects" || d.type === "text" || d.type === "list";
+  const locked = lockedReason(d);
+  const row = h("div", { class: "srow" + (wide ? " wide" : "") + (d.key in S.draft ? " changed" : "") + (S.errors[d.key] ? " bad" : ""), id: "s-" + d.key.replace(/\./g, "-") },
+    h("div", { class: "sl" },
+      d.type === "topics" || d.type === "projects" || locked ? h("span", { class: "lab" }, d.label) : h("label", { for: "c-" + d.key.replace(/\./g, "-") }, d.label),
+      h("p", { class: "help" }, d.help),
+      h("div", { class: "meta" },
+        (d.impact || []).map((x) => h("span", { class: "badge " + x }, IMPACT_LABEL[x])),
+        locked ? h("span", {}, locked) : d.type !== "topics" && d.type !== "projects" ? h("span", {}, "Mặc định: " + fmtValue(d, S.page.defaults[d.key])) : null,
+        d.applies === "restart" ? h("span", {}, "Cần mở lại dashboard") : null,
+        !locked ? h("button", { "data-reset": d.key, hidden: same(valueOf(d.key), S.page.defaults[d.key]), onclick: () => { setValue(d.key, structuredClone(S.page.defaults[d.key])); renderList(); } }, "Về mặc định") : null),
+      h("p", { class: "err", hidden: !S.errors[d.key] }, S.errors[d.key] || "")),
+    control(d));
+  return row;
+}
+function renderSettings(v) {
+  if (S.problem || !S.page) {
+    $("#psub").textContent = "";
+    return v.replaceChildren(empty("Không tải được cài đặt", S.problem || "Đang tải…", h("button", { class: "btn", onclick: () => load() }, "Thử lại")));
+  }
+  const pg = S.page; const est = pg.estimate;
+  $("#psub").textContent = CLOUD ? "Sửa ở đây; PC kiểm tra và áp dụng ở lần đồng bộ kế tiếp" : "Lưu vào " + pg.file;
+  const remote = pg.remote;
+  const notes = [];
+  if (CLOUD && pg.pending) notes.push(h("div", { class: "alert", id: "settings-pending" }, `Đang chờ PC áp dụng thay đổi gửi lúc ${new Date(pg.pending.at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} (${Object.keys(pg.pending.patch).map((k) => (defOf(k) || { label: k }).label).join(", ")}). PC cần đang bật dashboard hoặc chạy quét.`));
+  else if (remote && Date.now() - remote.sentAt < 7 * 86400000) notes.push(remote.ok
+    ? h("div", { class: "alert", id: "settings-remote", style: "background:var(--pos-soft);color:var(--pos)" }, `PC đã áp dụng thay đổi từ ${remote.device === "web" ? "web" : remote.device || "điện thoại"} ${ago(remote.appliedAt)}: ${remote.changed.map((k) => (defOf(k) || { label: k }).label).join(", ") || "không có gì khác"}.`)
+    : h("div", { class: "alert bad", id: "settings-remote" }, `PC từ chối thay đổi từ ${remote.device || "điện thoại"} ${ago(remote.appliedAt)}: ${remote.errors.map((e) => ((defOf(e.key) || {}).label || e.key || "") + " " + e.problem).join("; ")}`));
+  const groups = pg.groups.map((g) => {
+    const defs = pg.defs.filter((d) => d.group === g.id);
+    const basic = defs.filter((d) => !d.advanced), adv = defs.filter((d) => d.advanced);
+    const openAdv = adv.some((d) => d.key in S.draft || S.errors[d.key]);
+    return h("section", { class: "sgroup", id: "g-" + g.id, "aria-labelledby": "gh-" + g.id },
+      h("header", {}, h("h2", { id: "gh-" + g.id }, g.label), h("p", {}, g.help)),
+      basic.map(settingRow),
+      adv.length ? h("details", { class: "more", open: openAdv || null }, h("summary", {}, `Nâng cao (${adv.length})`), h("div", { style: "display:block;padding:0" }, adv.map(settingRow))) : null);
+  });
+  const hist = !CLOUD && pg.history.length ? h("section", { class: "sgroup", id: "g-history" },
+    h("header", {}, h("h2", {}, "Nhật ký thay đổi"), h("p", {}, "Mỗi lần lưu giữ lại bản trước đó. Khôi phục đưa mọi cài đặt về như ngay trước lần đổi.")),
+    h("ul", { class: "hist", style: "padding:4px 0 10px" }, pg.history.slice(0, 10).map((e) => h("li", {},
+      h("span", {}, e.changed.map((k) => (defOf(k) || { label: k }).label).join(", ")),
+      h("small", {}, `${ago(e.at)} · từ ${SOURCE_LABEL[e.source] || e.source}${e.device ? " (" + e.device + ")" : ""}`),
+      h("button", { class: "btn sm", onclick: () => restoreSettings(e.id) }, "Khôi phục"))))) : null;
+  const nav = h("nav", { class: "gnav", "aria-label": "Nhóm cài đặt" }, pg.groups.map((g) => h("button", { class: "chip", onclick: () => document.getElementById("g-" + g.id).scrollIntoView({ behavior: "smooth", block: "start" }) }, g.label)));
+  v.replaceChildren(h("div", { class: "set" },
+    h("div", { class: "intro" },
+      h("div", { class: "est num", id: "estimate" },
+        h("span", {}, "Mỗi lần quét: ", h("b", {}, fmt.format(est.searches)), " lượt tìm GitHub"),
+        h("span", {}, "tối đa ", h("b", {}, fmt.format(est.triageCalls + est.cardCalls)), " lần gọi AI"),
+        h("span", {}, h("b", {}, fmtK(est.tokens)), " token (ước tính, chưa trừ cache)")),
+      ...notes),
+    nav, ...groups, hist));
+  renderSavebar();
+}
+
+/* ---------- category filter (Explore) ---------- */
+function renderCats() {
+  const box = $("#cats");
+  const cats = ((ui.health && ui.health.categories) || []).filter((c) => c.active);
+  box.hidden = ui.tab !== "explore" || cats.length < 2;
+  if (box.hidden) return box.replaceChildren();
+  const pick = (id) => { ui.cat = ui.cat === id ? "" : id; ui.sel = 0; load(); };
+  box.replaceChildren(h("button", { class: "chip", "aria-pressed": String(!ui.cat), onclick: () => pick("") }, "Tất cả"),
+    ...cats.map((c) => h("button", { class: "chip", "aria-pressed": String(ui.cat === c.id), onclick: () => pick(c.id) }, c.label)));
+}
+
 /* ---------- data ---------- */
 async function load(o = {}) {
   const prevId = ui.items[ui.sel] && ui.items[ui.sel].id; const prevSel = ui.sel;
@@ -754,7 +1156,8 @@ async function load(o = {}) {
     let items = [], day = null;
     if (ui.tab === "today") { const d = await api("/api/digest"); items = d.items; day = d.day; hl.digestCount = items.length; }
     else if (ui.tab === "kept") { const [a, b] = await Promise.all([api("/api/entities?state=kept&limit=200"), api("/api/entities?state=trying&limit=200")]); items = [...b.items, ...a.items]; }
-    else if (ui.tab === "explore") { items = (await api("/api/entities?limit=80&q=" + encodeURIComponent($("#q").value))).items; }
+    else if (ui.tab === "explore") { items = (await api("/api/entities?limit=80&q=" + encodeURIComponent($("#q").value) + (ui.cat ? "&cat=" + encodeURIComponent(ui.cat) : ""))).items; }
+    else if (ui.tab === "settings" && !o.keepSettings) { await loadSettings(); }
     if (hl.digestCount == null && ui.health) hl.digestCount = ui.health.digestCount;
     ui.health = hl; ui.items = items; ui.day = day;
     const keep = items.findIndex((x) => x.id === prevId);
@@ -769,12 +1172,12 @@ $("#closesheet").addEventListener("click", () => closeSheet());
 $("#runnow2").addEventListener("click", runNow);
 document.addEventListener("keydown", (ev) => {
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-  if (ev.target.closest("input")) { if (ev.key === "Escape") ev.target.blur(); return; }
+  if (ev.target.closest("input, textarea, select")) { if (ev.key === "Escape") ev.target.blur(); return; }
   const k = ev.key.toLowerCase(); const it = ui.items[ui.sel];
-  if (/^[1-4]$/.test(k)) return go(TABS[Number(k) - 1].k);
+  if (/^[1-5]$/.test(k)) return go(TABS[Number(k) - 1].k);
   if (k === "/") { ev.preventDefault(); if (ui.tab !== "explore") go("explore"); setTimeout(() => $("#q").focus(), 0); return; }
   if (k === "escape") return closeSheet();
-  if (ui.tab === "system" || !ui.items.length) return;
+  if (WIDE(ui.tab) || !ui.items.length) return;
   if (k === "j" || k === "arrowdown") { ev.preventDefault(); select(ui.sel + 1); }
   else if (k === "k" || k === "arrowup") { ev.preventDefault(); select(ui.sel - 1); }
   else if (k === "enter") select(ui.sel, true);
@@ -783,7 +1186,8 @@ document.addEventListener("keydown", (ev) => {
   else if (k === "x") act(it, "skip", "Đã bỏ");
   else if (k === "s" && ui.tab !== "kept") act(it, "snooze", "Sẽ hiện lại sau 7 ngày");
 });
-document.addEventListener("visibilitychange", () => { if (!document.hidden) load({ keepIndex: true }); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load({ keepIndex: true, keepSettings: true }); });
+addEventListener("beforeunload", (ev) => { if (dirtyCount()) { ev.preventDefault(); ev.returnValue = ""; } });
 renderNav();
 load();
 </script>

@@ -6,7 +6,7 @@ PC là nơi giữ dữ liệu thật (`~/.vhub-trend/trend.sqlite`). Điện tho
    ┌────────┐   service account (IAM)   ┌──────────────── Firestore (Spark, miễn phí) ────────────────┐
    │  PC    │──────────────────────────▶│ owners/{uid}/snapshot/latest   PC ghi, người dùng chỉ đọc    │
    │ SQLite │  sync mỗi 10 phút khi     │ owners/{uid}/inbox/{eventId}   người dùng chỉ tạo; PC đọc,   │
-   │ trend  │  dashboard chạy, và sau   │                                áp dụng rồi xoá                │
+   │ trend  │  dashboard chạy, và sau   │ owners/{uid}/settingsInbox/{id}  áp dụng rồi xoá             │
    │ serve  │  mỗi lần scan             └───────────────▲──────────────────────────▲───────────────────┘
    └────────┘                                           │ REST + ID token          │ REST + ID token
                                                   ┌─────┴──────┐            ┌──────┴───────┐
@@ -40,6 +40,7 @@ Mẫu đầy đủ, do test sinh ra và test Android đọc lại: [`docs/contra
 | `health.lastRun` | object hoặc null | `startedAt, finishedAt, status, error, collected, created, merged, triaged, carded, digest, llmCalls, cacheHits, dropped, degraded, sourceErrors` |
 | `health.tokens` | object | `used, limit, calls, costUsd` (hôm nay) |
 | `health.counts` | object | Số mục theo trạng thái `new, kept, skipped, snoozed, trying, done` |
+| `settings` | object, không bắt buộc | Trang Cài đặt của PC: `groups, defs, values, defaults, rev, estimate, categories, remote`. Thêm sau schema 1 (field mới, app cũ bỏ qua). Chi tiết ở mục Cài đặt từ xa |
 
 Item = đúng dạng `/api/entities` (`id, title, description, url, author, license, topics, stage, userState, triage{score,cat,why}, heuristic, card{what,learn,apply[{project,how}],effort,risk} | null, stars, points, sources, firstSeen, shownAt, shownReason?`) cộng `series`: số sao/điểm theo ngày, cũ trước, tối đa 30.
 
@@ -56,6 +57,25 @@ Item = đúng dạng `/api/entities` (`id, title, description, url, author, lice
 | `device` | string ≤ 40 | không |
 
 Rules kiểm tra đúng bảng này (`firebase/firestore.rules.tmpl`, test ở `tests/rules`). PC áp dụng theo thứ tự `at`; thao tác nào tới sau (theo `at`) thắng.
+
+## Cài đặt từ xa
+
+PC giữ `~/.vhub-trend/config.json`. Web và điện thoại sửa được cài đặt, nhưng không ghi thẳng: chúng gửi một thay đổi, PC kiểm tra lại rồi mới ghi.
+
+- Snapshot mang `settings`: danh mục cài đặt (`defs`: nhãn, giải thích, giới hạn, `editable`, `remote`), giá trị hiện tại (`values`, khoá dạng `funnel.digestSize`), mặc định, `rev`, ước tính mỗi lần quét, danh sách chủ đề (`categories`) và `remote` = kết quả thay đổi từ xa gần nhất (`id, sentAt, appliedAt, device, ok, changed, errors`). App không cần cập nhật khi PC thêm cài đặt mới.
+- Gửi: `owners/{uid}/settingsInbox/{id}`, `id` 8–64 ký tự `[A-Za-z0-9_-]`, chỉ được tạo.
+
+| Field | Kiểu | Bắt buộc |
+|---|---|---|
+| `patch` | string 2–20000: JSON object `{ "khoá cài đặt": giá trị mới }` | có |
+| `baseRev` | string ≤ 64: `settings.rev` lúc bắt đầu sửa | có (chỉ để ghi nhận) |
+| `at` | int, mili giây Unix lúc gửi | có |
+| `device` | string ≤ 40 (`web`, tên máy Android) | không |
+
+- PC (mỗi lần sync và trước mỗi lần quét) áp dụng theo thứ tự `at`, đúng một lần cho mỗi `id` (bảng `cloud_event`), rồi xoá document. Mỗi thay đổi được kiểm tra bằng đúng luật của trang Cài đặt trên PC; sai một mục thì bỏ cả thay đổi và báo lỗi trong `settings.remote`. Mỗi lần ghi đều sao lưu file cũ vào `config-history/`, hoàn tác được trên dashboard của PC.
+- Không sửa được từ xa: `llm.command`, `llm.kind` (`editable: false`, chỉ sửa trong config.json) và `server.port` (`remote: false`). PC từ chối dù rules cho qua.
+- Hai nơi cùng sửa: mục nào tới sau (theo `at`) thắng, theo từng khoá. Web và app hiện giá trị đang chờ cho tới khi `settings.remote.sentAt` ≥ lúc gửi.
+- PC phải đang chạy (dashboard mở, hoặc tới lịch quét) thì thay đổi mới có hiệu lực.
 
 ## Đăng nhập và allowlist
 

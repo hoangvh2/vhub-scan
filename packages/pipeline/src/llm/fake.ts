@@ -15,11 +15,13 @@ export class FakeLlm implements LlmAdapter {
     let data: unknown;
     if (req.stage === "triage") {
       const lines = req.user.split("\n").filter((l) => l.includes("|"));
+      // The first category the schema allows (the first enabled topic) stands for "fits a topic".
+      const cats = (req.schema as { properties?: { items?: { items?: { properties?: { c?: { enum?: string[] } } } } } }).properties?.items?.items?.properties?.c?.enum ?? ["other"];
       data = {
         items: lines.map((l) => {
           const id = l.split("|")[0]!;
           const good = /tool|assistant|planner|automation|workflow|agent/i.test(l);
-          return { id, s: good ? 3 : 1, c: good ? "work-tool" : "other", w: good ? "huu ich cho cong viec" : "it lien quan" };
+          return { id, s: good ? 3 : 1, c: good ? cats[0] : "other", w: good ? "huu ich cho cong viec" : "it lien quan" };
         }),
       };
     } else {

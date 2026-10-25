@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import com.vh.trend.core.Action
 import com.vh.trend.core.Item
 import com.vh.trend.core.Source
+import kotlinx.serialization.json.JsonElement
 
 /** Everything the screens can ask for. The ViewModel implements it; screenshot tests pass no-ops. */
 interface UiActions {
@@ -88,9 +89,13 @@ interface UiActions {
     fun dismissNotice() {}
     fun signIn() {}
     fun signOut() {}
+    fun category(id: String?) {}
+    fun editSetting(key: String, value: JsonElement, reset: Boolean = false) {}
+    fun discardSettings() {}
+    fun saveSettings() {}
 }
 
-private val TabIcons = mapOf(Tab.Today to Icons.Today, Tab.Kept to Icons.Kept, Tab.Explore to Icons.Explore, Tab.System to Icons.System)
+private val TabIcons = mapOf(Tab.Today to Icons.Today, Tab.Kept to Icons.Kept, Tab.Explore to Icons.Explore, Tab.System to Icons.System, Tab.Settings to Icons.Settings)
 
 /** Root. Phone: list, detail on top, bottom bar. Tablet: rail + list (+ detail side by side from 840dp). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,7 +111,7 @@ fun TrendApp(ui: UiState, on: UiActions, now: Long = System.currentTimeMillis())
     }
     BoxWithConstraints(Modifier.fillMaxSize().background(c.bg)) {
         val wide = maxWidth >= 600.dp
-        val twoPane = maxWidth >= 840.dp && ui.tab != Tab.System
+        val twoPane = maxWidth >= 840.dp && ui.tab != Tab.System && ui.tab != Tab.Settings
         val detail = ui.selected
         if (!twoPane && detail != null) BackHandler { on.select(null) }
         Scaffold(
@@ -114,7 +119,7 @@ fun TrendApp(ui: UiState, on: UiActions, now: Long = System.currentTimeMillis())
             contentWindowInsets = WindowInsets.safeDrawing,
             snackbarHost = { SnackbarHost(snack) },
             bottomBar = {
-                if (!wide && (detail == null || ui.tab == Tab.System)) {
+                if (!wide && (detail == null || ui.tab == Tab.System || ui.tab == Tab.Settings)) {
                     NavigationBar(containerColor = c.surface, tonalElevation = 0.dp) {
                         Tab.entries.forEach { t ->
                             NavigationBarItem(
@@ -150,14 +155,15 @@ fun TrendApp(ui: UiState, on: UiActions, now: Long = System.currentTimeMillis())
                 }
                 when {
                     ui.tab == Tab.System -> SystemPane(ui, on, now, Modifier.fillMaxSize())
+                    ui.tab == Tab.Settings -> SettingsPane(ui, on, now, Modifier.fillMaxSize())
                     twoPane -> {
                         val shown = detail ?: ui.items.firstOrNull()
                         ListPane(ui, on, now, Modifier.width(400.dp).fillMaxHeight(), highlight = shown?.id)
                         VerticalDivider(color = c.line)
-                        if (shown != null) DetailPane(shown, ui.tab, on, onBack = null, modifier = Modifier.weight(1f))
+                        if (shown != null) DetailPane(shown, ui.tab, on, onBack = null, modifier = Modifier.weight(1f), catLabel = ui::categoryLabel)
                         else Box(Modifier.weight(1f).fillMaxHeight().background(c.surface))
                     }
-                    detail != null -> DetailPane(detail, ui.tab, on, onBack = { on.select(null) }, modifier = Modifier.fillMaxSize())
+                    detail != null -> DetailPane(detail, ui.tab, on, onBack = { on.select(null) }, modifier = Modifier.fillMaxSize(), catLabel = ui::categoryLabel)
                     else -> ListPane(ui, on, now, Modifier.fillMaxSize())
                 }
             }
@@ -180,7 +186,7 @@ fun ListPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier, highligh
                 Tab.Today -> s?.day?.let { "${dayLabel(it)} · ${ui.items.size} ý" }
                 Tab.Kept -> "${ui.items.size} ý đang giữ hoặc đang thử"
                 Tab.Explore -> if (ui.query.isBlank()) "Ý đã phân tích, xếp theo điểm" else "${ui.items.size} kết quả"
-                Tab.System -> null
+                Tab.System, Tab.Settings -> null
             }
             sub?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.mute) }
             SourceLine(ui.sync, ui.refreshing, now)
@@ -191,6 +197,7 @@ fun ListPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier, highligh
                     shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 6.dp, end = 8.dp),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = c.ink2, unfocusedBorderColor = c.line2, focusedContainerColor = c.raised, unfocusedContainerColor = c.raised),
                 )
+                CategoryChips(ui, on)
             }
         }
         ui.sync.error?.let { Notice(it, Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp)) }
@@ -217,13 +224,13 @@ fun ListPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier, highligh
 }
 
 @Composable
-private fun Notice(text: String, modifier: Modifier = Modifier) {
+internal fun Notice(text: String, modifier: Modifier = Modifier) {
     val c = T.c
     Text(text, style = MaterialTheme.typography.bodySmall, color = c.warn, modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(c.warnSoft).padding(horizontal = 10.dp, vertical = 8.dp))
 }
 
 @Composable
-fun DetailPane(it: Item, tab: Tab, on: UiActions, onBack: (() -> Unit)?, modifier: Modifier) {
+fun DetailPane(it: Item, tab: Tab, on: UiActions, onBack: (() -> Unit)?, modifier: Modifier, catLabel: (String?) -> String? = { null }) {
     val c = T.c
     val uri = LocalUriHandler.current
     val card = it.card
@@ -240,6 +247,7 @@ fun DetailPane(it: Item, tab: Tab, on: UiActions, onBack: (() -> Unit)?, modifie
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(it.title, style = MaterialTheme.typography.headlineSmall, color = c.ink)
                 Glance(it)
+                catLabel(it.triage.cat)?.let { l -> Text("Chủ đề: $l", style = MaterialTheme.typography.bodySmall, color = c.mute) }
             }
             it.triage.why?.let { why ->
                 Row(Modifier.height(IntrinsicSize.Min)) {
@@ -423,7 +431,7 @@ private fun Tile(label: String, value: String, modifier: Modifier = Modifier, ba
 }
 
 @Composable
-private fun Panel(title: String, content: @Composable () -> Unit) {
+internal fun Panel(title: String, content: @Composable () -> Unit) {
     val c = T.c
     Column(
         Modifier.fillMaxWidth().widthIn(max = 640.dp).clip(RoundedCornerShape(8.dp)).background(c.raised).border(1.dp, c.line, RoundedCornerShape(8.dp)).padding(14.dp),

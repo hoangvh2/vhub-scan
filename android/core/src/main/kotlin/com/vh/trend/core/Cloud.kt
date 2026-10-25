@@ -125,7 +125,28 @@ class CloudClient(
             else -> false
         }
     }
+
+    /** Puts a settings change in the PC's settingsInbox. The PC validates it again before it touches config.json. */
+    suspend fun sendSettings(c: SettingsChange): Delivery {
+        val body = buildJsonObject {
+            putJsonObject("fields") {
+                putJsonObject("patch") { put("stringValue", c.patch.toString()) }
+                putJsonObject("baseRev") { put("stringValue", c.baseRev) }
+                putJsonObject("at") { put("integerValue", c.at.toString()) }
+                putJsonObject("device") { put("stringValue", device.take(40)) }
+            }
+        }.toString()
+        val r = http.send(HttpRequest("POST", "$docs/settingsInbox?documentId=${c.id}", mapOf("authorization" to "Bearer ${auth.idToken()}", "content-type" to "application/json"), body))
+        return when {
+            r.ok || r.code == 409 -> Delivery.Stored
+            r.code == 401 -> throw notAllowed()
+            r.code == 403 -> Delivery.Rejected
+            else -> Delivery.Retry
+        }
+    }
 }
+
+enum class Delivery { Stored, Rejected, Retry }
 
 class CloudError(message: String) : Exception(message)
 

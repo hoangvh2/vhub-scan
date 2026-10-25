@@ -13,6 +13,8 @@ data class Snapshot(
     val kept: List<Item> = emptyList(),
     val explore: List<Item> = emptyList(),
     val health: Health,
+    /** The PC's settings page; absent from PCs older than the settings page. */
+    val settings: SettingsSnapshot? = null,
 ) {
     fun find(id: String): Item? = digest.firstOrNull { it.id == id } ?: kept.firstOrNull { it.id == id } ?: explore.firstOrNull { it.id == id }
 

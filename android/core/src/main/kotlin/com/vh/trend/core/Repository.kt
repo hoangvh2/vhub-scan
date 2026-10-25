@@ -4,6 +4,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonObject
 import java.util.UUID
 
 enum class Source { Cloud, Cache }
@@ -21,7 +22,13 @@ data class SyncState(
     /** Actions waiting to reach the cloud inbox. */
     val pending: Int,
     val error: String? = null,
+    /** Settings changes sent (or waiting to be sent) that the PC has not applied yet, oldest first. */
+    val settingsWaiting: List<SettingsChange> = emptyList(),
 )
+
+/** A settings change from this phone: setting key -> new value, as the PC's settings page takes it. */
+@Serializable
+data class SettingsChange(val id: String, val at: Long, val patch: JsonObject, val baseRev: String, val sent: Boolean = false)
 
 @Serializable
 private data class Cached(val source: Source, val fetchedAt: Long, val snapshot: Snapshot)
@@ -65,20 +72,22 @@ class TrendRepository(
 
     private fun clearAll() {
         auth.clear()
-        listOf(K_CACHE, K_QUEUE, K_OVERLAY).forEach { kv.put(it, null) }
+        listOf(K_CACHE, K_QUEUE, K_OVERLAY, K_SETTINGS).forEach { kv.put(it, null) }
     }
 
     fun state(error: String? = null): SyncState {
         val c = cached()
+        val waiting = settingsQueue(c?.snapshot)
         return SyncState(
             configured = settings.configured,
             signedIn = auth.signedIn,
             email = auth.email,
-            snapshot = c?.snapshot?.let { applyOverlay(it) },
+            snapshot = c?.snapshot?.let { withSettings(applyOverlay(it), waiting) },
             source = c?.source,
             fetchedAt = c?.fetchedAt,
             pending = queue().size,
             error = error,
+            settingsWaiting = waiting,
         )
     }
 
@@ -87,9 +96,16 @@ class TrendRepository(
         if (!settings.configured || !auth.signedIn) return@withLock state()
         try {
             flush { cloud.send(it) }
+            val rejected = flushSettings()
             val snap = cloud.snapshot()
             if (snap != null) store(Cached(Source.Cloud, now(), snap))
-            state(if (snap == null) "PC chưa đẩy dữ liệu lên cloud. Trên PC chạy  npm run sync." else null)
+            state(
+                when {
+                    rejected -> "Cloud từ chối một thay đổi cài đặt (quá lớn hoặc sai định dạng), nên đã bỏ nó. Sửa lại rồi gửi lần nữa."
+                    snap == null -> "PC chưa đẩy dữ liệu lên cloud. Trên PC chạy  npm run sync."
+                    else -> null
+                },
+            )
         } catch (e: AuthLost) {
             state(e.message)
         } catch (e: Exception) {
@@ -103,6 +119,67 @@ class TrendRepository(
         saveQueue(queue() + e)
         saveOverlay(overlay().filter { it.entityId != item.id } + Overlay(item.id, action.state, e.at))
         state()
+    }
+
+    /**
+     * Queues a settings change for the PC and returns the state that already shows it. Values are checked against the
+     * catalogue first; a change that is not valid is refused here with the PC's own wording. Call [refresh] to deliver it.
+     */
+    suspend fun changeSettings(patch: JsonObject): Pair<SyncState, List<SettingError>> = lock.withLock {
+        val st = cached()?.snapshot?.settings ?: return@withLock state() to listOf(SettingError("", "PC chưa gửi cài đặt lên cloud. Cập nhật pipeline trên PC rồi chạy: npm run sync"))
+        val errors = patch.mapNotNull { (k, v) ->
+            val d = st.def(k)
+            when {
+                d == null -> SettingError(k, "không có cài đặt này")
+                !d.phoneEditable -> SettingError(k, if (!d.editable) "chỉ sửa được trong config.json trên PC" else "chỉ sửa được trên dashboard của PC")
+                else -> SettingRules.problem(d, v)?.let { SettingError(k, it) }
+            }
+        }
+        if (errors.isNotEmpty() || patch.isEmpty()) return@withLock state() to errors
+        val q = settingsQueue(cached()?.snapshot)
+        val last = q.lastOrNull()
+        // Not sent yet: fold into the waiting change, so the PC gets one change and one entry in its history.
+        val next = if (last != null && !last.sent) q.dropLast(1) + last.copy(at = now(), patch = JsonObject(last.patch + patch))
+        else q + SettingsChange("s" + newId().takeLast(40), now(), patch, st.rev)
+        saveSettings(next)
+        state() to emptyList()
+    }
+
+    /** True when the cloud refused a change (it is dropped: sending it again cannot succeed). */
+    private suspend fun flushSettings(): Boolean {
+        var rejected = false
+        for (waiting in settingsQueue(null).filter { !it.sent }) {
+            // Stamped when it leaves: the PC applies its inbox in `at` order, so a change made offline must not sort
+            // before one the PC has already taken (it would be read as applied, see settingsQueue).
+            val c = waiting.copy(at = maxOf(waiting.at, now()))
+            when (cloud.sendSettings(c)) {
+                Delivery.Stored -> saveSettings(settingsQueue(null).map { if (it.id == c.id) c.copy(sent = true) else it })
+                Delivery.Rejected -> { rejected = true; saveSettings(settingsQueue(null).filter { it.id != c.id }) }
+                Delivery.Retry -> return rejected
+            }
+        }
+        return rejected
+    }
+
+    /**
+     * Changes the PC has not applied yet. The PC applies its inbox in the order the changes were made and reports the
+     * last one it took, so every sent change made at or before that one is done (accepted or refused: see `remote`).
+     */
+    private fun settingsQueue(snap: Snapshot?): List<SettingsChange> {
+        val all = kv.get(K_SETTINGS)?.let { runCatching { TrendJson.decodeFromString(ListSerializer(SettingsChange.serializer()), it) }.getOrNull() } ?: emptyList()
+        val done = snap?.settings?.remote?.sentAt ?: return all
+        val live = all.filter { !it.sent || it.at > done }
+        if (live.size != all.size) saveSettings(live)
+        return live
+    }
+
+    private fun saveSettings(q: List<SettingsChange>) = kv.put(K_SETTINGS, TrendJson.encodeToString(ListSerializer(SettingsChange.serializer()), q))
+
+    /** Shows waiting changes on top of the PC's values, as the dashboard does, until the PC reports them applied. */
+    private fun withSettings(s: Snapshot, waiting: List<SettingsChange>): Snapshot {
+        val st = s.settings ?: return s
+        if (waiting.isEmpty()) return s
+        return s.copy(settings = st.copy(values = JsonObject(waiting.fold(st.values as Map<String, kotlinx.serialization.json.JsonElement>) { acc, c -> acc + c.patch })))
     }
 
     private suspend fun flush(send: suspend (Event) -> Boolean) {
@@ -136,5 +213,6 @@ class TrendRepository(
         const val K_CACHE = "snapshot.cache"
         const val K_QUEUE = "queue"
         const val K_OVERLAY = "overlay"
+        const val K_SETTINGS = "settings.queue"
     }
 }

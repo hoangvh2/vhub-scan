@@ -1,6 +1,19 @@
 import { readFileSync } from "node:fs";
+import { validateConfig } from "./settings.js";
+
+/** A search category: what to look for (GitHub queries + keywords) and the label the AI files matching items under. */
+export interface Topic {
+  /** Stable slug, also the category id stored on triaged items. */
+  id: string;
+  label: string;
+  enabled: boolean;
+  queries: string[];
+  /** Added to scope.include while the topic is on. */
+  keywords: string[];
+}
 
 export interface Config {
+  topics: Topic[];
   scope: {
     /** Words that raise the heuristic score (tools for work and life). */
     include: string[];
@@ -42,6 +55,29 @@ export interface Config {
 }
 
 export const defaultConfig: Config = {
+  topics: [
+    {
+      id: "claude-code",
+      label: "Claude Code & AI agent",
+      enabled: true,
+      queries: ["topic:claude-code created:>{d14} stars:>=3"],
+      keywords: ["claude code", "claude", "mcp", "agent"],
+    },
+    {
+      id: "productivity",
+      label: "Năng suất cá nhân",
+      enabled: true,
+      queries: ["topic:productivity created:>{d14} stars:>=5"],
+      keywords: ["productivity", "todo", "notes", "planner"],
+    },
+    {
+      id: "automation",
+      label: "Tự động hoá",
+      enabled: true,
+      queries: ["topic:automation created:>{d14} stars:>=5"],
+      keywords: ["automation", "workflow"],
+    },
+  ],
   scope: {
     include: [
       "productivity", "automation", "workflow", "assistant", "planner", "todo", "notes", "note-taking", "calendar",
@@ -61,7 +97,7 @@ export const defaultConfig: Config = {
   sources: {
     github: {
       enabled: true,
-      queries: ["topic:claude-code created:>{d14} stars:>=3", "topic:productivity created:>{d14} stars:>=5"],
+      queries: [],
       seeds: [],
       perQuery: 30,
       refreshMax: 40,
@@ -116,7 +152,10 @@ export function parseConfig(json: string): Config {
   } catch (e) {
     throw new Error(`config không phải JSON hợp lệ (${e instanceof Error ? e.message : e}). Hay gặp: thiếu dấu phẩy giữa hai mục, thừa dấu phẩy sau mục cuối, hoặc dùng dấu nháy đơn thay vì nháy kép`);
   }
-  return merge(defaultConfig, raw);
+  const cfg = merge(defaultConfig, raw);
+  const bad = validateConfig(cfg)[0];
+  if (bad) throw new Error(`config ${bad.key}: ${bad.problem}`);
+  return cfg;
 }
 
 export function loadConfig(file: string | null): Config {
@@ -127,3 +166,27 @@ export function loadConfig(file: string | null): Config {
     throw new Error(`${file}: ${e instanceof Error ? e.message : e}`);
   }
 }
+
+const uniq = (xs: string[]): string[] => [...new Set(xs.map((x) => x.trim()).filter(Boolean))];
+
+/** Every GitHub search a run makes: the enabled topics' queries, then the extra ones, each once. */
+export function searchQueries(cfg: Config): string[] {
+  return uniq([...cfg.topics.filter((t) => t.enabled).flatMap((t) => t.queries), ...cfg.sources.github.queries]);
+}
+
+/** The GitHub source's settings with the topics' queries folded in. */
+export function githubSettings(cfg: Config): Config["sources"]["github"] {
+  return { ...cfg.sources.github, queries: searchQueries(cfg) };
+}
+
+/** Words that raise the heuristic score: the base list plus the keywords of enabled topics. */
+export function includeTerms(cfg: Config): string[] {
+  return uniq([...cfg.scope.include, ...cfg.topics.filter((t) => t.enabled).flatMap((t) => t.keywords)]);
+}
+
+/** Category ids the AI may assign: enabled topics, then "other" for anything that fits none. */
+export function categories(cfg: Config): { id: string; label: string }[] {
+  return [...cfg.topics.filter((t) => t.enabled).map((t) => ({ id: t.id, label: t.label })), { id: OTHER_CATEGORY, label: "Khác" }];
+}
+
+export const OTHER_CATEGORY = "other";
