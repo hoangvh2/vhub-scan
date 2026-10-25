@@ -78,7 +78,7 @@ jobs:
           GOOGLE_OAUTH_ACCESS_TOKEN: offline-plan-not-a-real-token
         run: |
           terraform plan -input=false -refresh=false -lock=false -var project_id=vhub-trend-ci-000 -var 'allowed_emails=["ci@example.com"]' -var 'android_sha1=["AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01"]' -var cloud_scan=true -var gemini_api_key=AIzaCiDummyKey -var cloud_github_token=true -var github_token=ghp_ci_dummy -no-color | tee plan-scan.txt
-          grep -q "Plan: 44 to add, 0 to change, 0 to destroy." plan-scan.txt
+          grep -q "Plan: 47 to add, 0 to change, 0 to destroy." plan-scan.txt
           grep -q "id in \[today() + '-1', today() + '-2'\]" plan-scan.txt
           ! grep -q "AIzaCiDummyKey\|ghp_ci_dummy" plan-scan.txt
       - name: Install

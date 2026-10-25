@@ -153,6 +153,36 @@ resource "google_secret_manager_secret_iam_member" "scan_github" {
   member    = "serviceAccount:${google_service_account.scan[0].email}"
 }
 
+# Eventarc delivers the Firestore events through its own Google-managed account. Google creates it when the API is
+# switched on, but its role reaches the trigger check only minutes later; the first apply then failed with
+# "Permission denied while using the Eventarc Service Agent". Create it explicitly, grant the role, and wait.
+resource "google_project_service_identity" "eventarc" {
+  count    = local.scan ? 1 : 0
+  provider = google-beta
+  project  = var.project_id
+  service  = "eventarc.googleapis.com"
+
+  depends_on = [google_project_service.scan]
+}
+
+resource "google_project_iam_member" "eventarc_agent" {
+  count   = local.scan ? 1 : 0
+  project = var.project_id
+  role    = "roles/eventarc.serviceAgent"
+  member  = "serviceAccount:${google_project_service_identity.eventarc[0].email}"
+}
+
+resource "time_sleep" "scan_iam" {
+  count           = local.scan ? 1 : 0
+  create_duration = "90s"
+
+  depends_on = [
+    google_project_iam_member.eventarc_agent,
+    google_project_iam_member.scan,
+    google_project_iam_member.build,
+  ]
+}
+
 # Builds the function's container; its own account so no broad default account is needed.
 resource "google_service_account" "build" {
   count        = local.scan ? 1 : 0
@@ -260,8 +290,7 @@ resource "google_cloudfunctions2_function" "scan" {
   }
 
   depends_on = [
-    google_project_iam_member.scan,
-    google_project_iam_member.build,
+    time_sleep.scan_iam,
     google_secret_manager_secret_version.gemini,
     google_secret_manager_secret_iam_member.scan_gemini,
     google_secret_manager_secret_iam_member.scan_github,
