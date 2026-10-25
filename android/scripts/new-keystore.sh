@@ -17,7 +17,12 @@ if [ -e "$ks" ]; then
   echo "Đã có khóa tại $ks — không tạo đè (mất khóa cũ = không cập nhật được app đã cài)." >&2
   echo "Muốn dùng lại khóa này cho CI: chạy với --upload và nhập đúng mật khẩu cũ." >&2
   [ "${1:-}" = "--upload" ] || exit 1
-  read -r -s -p "Mật khẩu keystore hiện có: " pass; echo
+  if [ -f "$dir/android-release.password" ]; then
+    pass="$(cat "$dir/android-release.password")"
+    echo "Dùng lại mật khẩu đã lưu ở $dir/android-release.password"
+  else
+    read -r -s -p "Mật khẩu keystore hiện có: " pass; echo
+  fi
 else
   pass="$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')"
   keytool -genkeypair -keystore "$ks" -storetype PKCS12 -storepass "$pass" -keypass "$pass" \
@@ -38,7 +43,11 @@ if [ "${1:-}" = "--upload" ]; then
   printf '%s' "$pass"       | gh secret set ANDROID_KEYSTORE_PASSWORD --repo "$repo"
   printf '%s' "$alias_name" | gh secret set ANDROID_KEY_ALIAS        --repo "$repo"
   printf '%s' "$pass"       | gh secret set ANDROID_KEY_PASSWORD     --repo "$repo"
-  echo "Đã đặt 4 secret cho $repo. Lần chạy workflow Android kế tiếp sẽ ký bằng khóa thật."
+  have="$(gh secret list --repo "$repo")"
+  for n in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+    printf '%s\n' "$have" | grep -q "^$n[[:space:]]" || { echo "Đã đặt nhưng chưa thấy $n trong 'gh secret list'." >&2; exit 1; }
+  done
+  echo "Đã đặt và kiểm tra đủ 4 secret trên $repo. Lần chạy workflow Android kế tiếp sẽ ký bằng khóa thật."
 else
   echo
   echo "Chưa upload. Thêm 4 secret ở GitHub → Settings → Secrets and variables → Actions:"
