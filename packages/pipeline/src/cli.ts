@@ -4,9 +4,7 @@ import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildCloud, buildDeps, ensureToken, loadHomeConfig, resolveHome, type Cloud } from "./app.js";
-import { checkPhonePath } from "./cloud/check.js";
 import { fromTerraformOutput, writeCloudConfig } from "./cloud/config.js";
-import { lanUrls, pairCode, pairPayload, qrSvg, qrTerminal, webLink } from "./cloud/pair.js";
 import { lastSync } from "./cloud/sync.js";
 import { defaultConfig, type Config } from "./config.js";
 import { ClaudeCliAdapter } from "./llm/claudeCli.js";
@@ -47,9 +45,9 @@ Hằng ngày:
   npm run scan            hoặc đặt lịch tự chạy: npm run schedule
   npm run status          lần chạy gần nhất, token đã dùng hôm nay
 
-Điện thoại (app Android):
-  npm run dashboard -- --lan    cho điện thoại cùng Wi-Fi mở được
-  npm run pair                  in mã ghép nối; hoặc dashboard → Hệ thống → Kết nối điện thoại
+Điện thoại và web (đăng nhập Google, xem infra/README.md):
+  npm run sync                  đẩy dữ liệu mới lên cloud và nhận thao tác từ web/điện thoại
+  npm run web:deploy            đưa dashboard web lên Firebase Hosting
 
 Lệnh đầy đủ (npm run trend -- <lệnh>, hoặc node packages/pipeline/dist/cli.js <lệnh>):
   init [--home DIR]           tạo thư mục dữ liệu, config, token; in hướng dẫn
@@ -62,8 +60,7 @@ Lệnh đầy đủ (npm run trend -- <lệnh>, hoặc node packages/pipeline/di
 
 Điện thoại và cloud (không bắt buộc; xem infra/README.md):
   cloud connect [--infra DIR] đọc output Terraform, ghi ~/.vhub-trend/cloud.json, kiểm tra kết nối
-  sync                        đồng bộ ngay: nhận thao tác từ điện thoại, đẩy dữ liệu mới lên
-  pair [--port N]             in mã ghép nối điện thoại (QR rõ nhất ở dashboard: tab Hệ thống)
+  sync                        đồng bộ ngay: nhận thao tác từ web/điện thoại, đẩy dữ liệu mới lên
 
 Dữ liệu nằm ở --home, hoặc $VHUB_TREND_HOME, hoặc ~/.vhub-trend.`;
 
@@ -145,7 +142,7 @@ async function main(): Promise<number> {
         if (cloud) {
           const r = await cloud.sync();
           line(r.ok ? "ok" : "fail", r.ok ? `cloud: đồng bộ được với Firestore (project ${cloud.cfg.projectId})` : `cloud: không đồng bộ được: ${r.error}`, r.ok ? undefined : "xem infra/README.md mục Lỗi thường gặp");
-          if (r.ok) for (const c of await checkPhonePath(cloud.cfg, new Date())) line(c.level, `cloud: ${c.msg}`, c.fix);
+          if (r.ok && !cloud.cfg.webClientId) line("warn", "cloud: chưa có web_client_id (Client ID đăng nhập Google), nên chưa dựng được web và APK", "làm bước 7 trong infra/README.md rồi chạy lại: npm run cloud:connect");
         }
         db.close();
       } else {
@@ -202,12 +199,6 @@ async function main(): Promise<number> {
           void runPipeline(deps).catch(() => undefined).then(sync).finally(() => (running = false));
           return { started: true };
         },
-        pair: () => {
-          const now = new Date();
-          const lan = host === "0.0.0.0" ? lanUrls(port) : [];
-          const code = pairCode(pairPayload({ lan, token, cloud: cloud?.cfg ?? null, now }));
-          return { code, svg: qrSvg(code), lan, cloud: !!cloud, ...(cloud ? { webLink: webLink(cloud.cfg, now) } : {}), lanReachable: lan.length > 0, expiresAt: new Date(now.getTime() + 3_600_000).toISOString() };
-        },
         extraHealth: () => ({ cloud: cloud ? { projectId: cloud.cfg.projectId, syncMinutes: cloud.cfg.syncMinutes, last: lastSync(db) } : null, lan: host === "0.0.0.0" }),
       });
       if (cloud) {
@@ -256,32 +247,6 @@ async function main(): Promise<number> {
       } finally {
         db.close();
       }
-    }
-    case "pair": {
-      const cfg = loadHomeConfig(home);
-      const { db, store, budget } = buildDeps(home, cfg);
-      const cloud = buildCloud(home, { db, store, budget });
-      db.close();
-      const port = Number(flags.get("port") ?? cfg.server.port);
-      const lan = lanUrls(port);
-      const code = pairCode(pairPayload({ lan, token: ensureToken(home), cloud: cloud?.cfg ?? null, now: new Date() }));
-      const art = qrTerminal(code, process.stdout.columns ?? 80);
-      console.log(art ?? "(Cửa sổ terminal hẹp quá để vẽ QR. Mở dashboard → Hệ thống → Kết nối điện thoại để quét, hoặc dán mã bên dưới.)");
-      console.log("\nCách ghép nối:");
-      if (cloud) {
-        console.log("  1. Trên điện thoại: mở app VHub Trend → Kết nối với PC → Quét mã (hoặc Dán mã).");
-        console.log("  2. Mã có hạn 1 giờ. Xong là app đọc dữ liệu từ cloud, ở đâu cũng xem được; không cần mở dashboard.");
-        console.log("  (Tùy chọn, nhanh hơn khi cùng Wi-Fi: chạy  npm run dashboard -- --lan  và giữ cửa sổ mở.)");
-      } else {
-        console.log("  1. Trên PC chạy:  npm run dashboard -- --lan   (giữ cửa sổ mở) để điện thoại cùng Wi-Fi vào được");
-        console.log("  2. Trên điện thoại: mở app VHub Trend → Kết nối với PC → Quét mã (hoặc Dán mã)");
-        console.log("  3. Cloud chưa bật: app chỉ xem được khi cùng Wi-Fi với PC. Bật cloud: xem infra/README.md");
-      }
-      console.log(`  Địa chỉ trong mã: ${lan.join(", ") || "(không thấy mạng LAN nào)"}`);
-      if (cloud) console.log("\nXem trên web (sau khi đã deploy, xem infra/README.md mục Web): mở liên kết này trong trình duyệt, có hạn 1 giờ, giữ riêng:\n" + webLink(cloud.cfg, new Date()));
-      console.log("\nMã (dán vào app nếu không quét được; giữ riêng, ai có mã này xem và sửa được danh sách của bạn):");
-      console.log(code);
-      return 0;
     }
     case "feedback": {
       const [id, action] = pos;

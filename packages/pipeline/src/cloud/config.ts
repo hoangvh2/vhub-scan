@@ -5,7 +5,7 @@ export interface CloudConfig {
   projectId: string;
   /** Firebase Web API key (identifies the project to Auth and Firestore; not a secret). */
   apiKey: string;
-  /** Firebase Auth uid the phone signs in as. Same value as the Terraform variable owner_uid. */
+  /** Firestore folder owners/<uid> the PC writes to and the web and phone read from. Same value as the Terraform variable owner_uid. Not a login. */
   uid: string;
   serviceAccount: { client_email: string; private_key: string };
   /** Minutes between background syncs while `trend serve` runs. */
@@ -13,8 +13,8 @@ export interface CloudConfig {
   /** Emulator or test endpoints. Unset = Google production endpoints. */
   firestoreUrl?: string;
   authUrl?: string;
-  /** Where the hosted dashboard lives. Unset = https://<projectId>.web.app (the default Firebase Hosting site). */
-  webUrl?: string;
+  /** Google sign-in Client ID ("Web client (auto created by Google Service)"); baked into the hosted dashboard. */
+  webClientId?: string;
 }
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -36,7 +36,7 @@ export function parseCloudConfig(json: string): CloudConfig {
     syncMinutes: Math.max(2, Math.min(240, Number(raw.syncMinutes) || 10)),
     ...(raw.firestoreUrl ? { firestoreUrl: raw.firestoreUrl } : {}),
     ...(raw.authUrl ? { authUrl: raw.authUrl } : {}),
-    ...(typeof raw.webUrl === "string" && /^https:\/\/[^\s/]+\/?$/.test(raw.webUrl) ? { webUrl: raw.webUrl.replace(/\/$/, "") } : {}),
+    ...(typeof raw.webClientId === "string" && /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(raw.webClientId) ? { webClientId: raw.webClientId } : {}),
   };
 }
 
@@ -64,6 +64,6 @@ export function fromTerraformOutput(json: string): CloudConfig {
   }
   const sa = JSON.parse(Buffer.from(keyB64, "base64").toString("utf8")) as { client_email?: string; private_key?: string };
   return parseCloudConfig(
-    JSON.stringify({ projectId: v("project_id"), apiKey: v("api_key"), uid: v("owner_uid") ?? "owner", serviceAccount: sa, syncMinutes: 10 }),
+    JSON.stringify({ projectId: v("project_id"), apiKey: v("api_key"), uid: v("owner_uid") ?? "owner", serviceAccount: sa, syncMinutes: 10, webClientId: v("web_client_id") || undefined }),
   );
 }

@@ -1,16 +1,16 @@
 // PC <-> Firestore <-> phone, end to end against the Firebase emulators (Firestore with the real rules, Auth).
 // The PC side is the production code (REST client, sync, custom tokens); the phone side makes the same
-// REST calls the Android app makes.
+// REST calls the Android app makes, signed in with Google (the Auth emulator accepts a fake Google ID token).
 import { generateKeyPairSync } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
-import { checkPhonePath } from "../../packages/pipeline/src/cloud/check.js";
 import type { CloudConfig } from "../../packages/pipeline/src/cloud/config.js";
 import { FirestoreRest } from "../../packages/pipeline/src/cloud/firestore.js";
-import { customToken, ServiceAccountAuth } from "../../packages/pipeline/src/cloud/google.js";
+import { ServiceAccountAuth } from "../../packages/pipeline/src/cloud/google.js";
 import { syncOnce } from "../../packages/pipeline/src/cloud/sync.js";
 import { runPipeline } from "../../packages/pipeline/src/pipeline.js";
 import { NOW, rig } from "../../packages/pipeline/test/helpers.js";
 import { cfg, world } from "../../packages/pipeline/test/world.js";
+import { signInWithGoogle } from "../helpers/google.js";
 
 const PROJECT = "demo-vhub-trend";
 const FS = "http://127.0.0.1:8080";
@@ -27,15 +27,10 @@ const cloud: CloudConfig = {
 };
 const docsUrl = `${FS}/v1/projects/${PROJECT}/databases/(default)/documents`;
 
-async function phoneSignIn(): Promise<string> {
-  const r = await fetch(`${AUTH}/v1/accounts:signInWithCustomToken?key=${cloud.apiKey}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token: customToken(cloud, new Date()), returnSecureToken: true }),
-  });
-  const j = (await r.json()) as { idToken: string };
+async function phoneSignIn(email = "me@example.com"): Promise<string> {
+  const r = await signInWithGoogle(email, cloud.apiKey);
   expect(r.status).toBe(200);
-  return j.idToken;
+  return r.idToken;
 }
 
 /** What the app sends when you tap Keep away from home. */
@@ -59,7 +54,6 @@ describe("PC and phone through Firestore", () => {
     const sync = () => syncOnce({ db: r.db, store: r.store, budget: r.deps.budget, docs, uid: "owner", clock: r.clock });
 
     expect(await sync()).toMatchObject({ ok: true, pushed: true });
-    expect((await checkPhonePath(cloud, new Date())).map((c) => c.level)).toEqual(["ok", "ok"]);
 
     const idToken = await phoneSignIn();
     const snap1 = (await (await fetch(`${docsUrl}/owners/owner/snapshot/latest`, { headers: { authorization: `Bearer ${idToken}` } })).json()) as { fields: { payload: { stringValue: string } } };
@@ -82,10 +76,12 @@ describe("PC and phone through Firestore", () => {
     expect(await sync()).toMatchObject({ ok: true, applied: 0, pushed: false });
   });
 
-  it("a stranger with a token for another uid sees nothing", async () => {
-    const other: CloudConfig = { ...cloud, uid: "mallory" };
-    const r = await fetch(`${AUTH}/v1/accounts:signInWithCustomToken?key=${cloud.apiKey}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: customToken(other, new Date()), returnSecureToken: true }) });
-    const { idToken } = (await r.json()) as { idToken: string };
-    expect((await fetch(`${docsUrl}/owners/owner/snapshot/latest`, { headers: { authorization: `Bearer ${idToken}` } })).status).toBe(403);
+  it("accounts that are not on the allowlist see nothing (unverified addresses are covered in the rules tests: the Auth emulator marks every Google address verified) and cannot queue events", async () => {
+    const snap = `${docsUrl}/owners/owner/snapshot/latest`;
+    const stranger = await phoneSignIn("mallory@example.com");
+    expect((await fetch(snap, { headers: { authorization: `Bearer ${stranger}` } })).status).toBe(403);
+    expect((await phoneQueues(stranger, "evt_stranger_01", { entityId: { stringValue: "x" }, action: { stringValue: "keep" }, at: { integerValue: "1" } })).status).toBe(403);
+    const wife = await phoneSignIn("Wife@Example.org");
+    expect((await fetch(snap, { headers: { authorization: `Bearer ${wife}` } })).status).toBe(200);
   });
 });

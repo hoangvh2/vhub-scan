@@ -1,5 +1,4 @@
-# The PC's identity: writes the snapshot, reads and clears the phone's inbox, and signs the custom
-# tokens that pair a phone. Nothing else.
+# The PC's identity: writes the snapshot and reads and clears the inbox. Nothing else.
 resource "google_service_account" "pc" {
   project      = var.project_id
   account_id   = "vhub-trend-pc"

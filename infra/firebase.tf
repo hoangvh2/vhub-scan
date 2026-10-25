@@ -20,14 +20,15 @@ resource "google_firestore_database" "default" {
   depends_on = [google_firebase_project.this]
 }
 
-# The same rules file the emulator tests run against (tests/rules).
+# The same template the emulator tests run against (tests/rules), with the allowlist filled in. Changing
+# allowed_emails and applying again is how people are added or removed.
 resource "google_firebaserules_ruleset" "firestore" {
   project = var.project_id
 
   source {
     files {
       name    = "firestore.rules"
-      content = file("${path.module}/../firebase/firestore.rules")
+      content = replace(file("${path.module}/../firebase/firestore.rules.tmpl"), "__ALLOWED_EMAILS__", join(", ", [for e in var.allowed_emails : "'${lower(e)}'"]))
     }
   }
 
@@ -44,8 +45,8 @@ resource "google_firebaserules_release" "firestore" {
   ruleset_name = google_firebaserules_ruleset.firestore.name
 }
 
-# Identifies the project to Firebase Auth and Firestore (not a secret; access is decided by the rules).
-# Restricted to the three APIs the phone calls.
+# Identifies the project to Firebase Auth and Firestore (not a secret; access is decided by the rules and Google sign-in).
+# Restricted to the three APIs the web page and the phone call.
 resource "google_apikeys_key" "phone" {
   project      = var.project_id
   name         = "vhub-trend-phone"
@@ -64,4 +65,19 @@ resource "google_apikeys_key" "phone" {
   }
 
   depends_on = [google_project_service.api]
+}
+
+# ---------------------------------------------------------------- the Android app (optional)
+# Registering the app with its signing certificate's SHA-1 creates the Android OAuth client that
+# Google sign-in on the phone needs. The package name is fixed in android/app/build.gradle.kts.
+resource "google_firebase_android_app" "android" {
+  count           = length(var.android_sha1) > 0 ? 1 : 0
+  provider        = google-beta
+  project         = var.project_id
+  display_name    = "VHub Trend Android"
+  package_name    = "com.vh.trend"
+  sha1_hashes     = [for h in var.android_sha1 : lower(replace(h, ":", ""))]
+  deletion_policy = "DELETE"
+
+  depends_on = [google_firebase_project.this]
 }

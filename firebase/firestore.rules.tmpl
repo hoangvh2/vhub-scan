@@ -1,0 +1,42 @@
+rules_version = '2';
+
+// VHub Trend Scan. TEMPLATE: the allowlist is substituted for the double-underscore placeholder in allowed() below at deploy time
+// (Terraform: var.allowed_emails; tests and the emulator: firebase/gen-rules.mjs). The result is
+// firestore.rules, which is not committed because the list holds personal addresses.
+//
+// The PC is the source of truth; Firestore only carries:
+//   /owners/{o}/snapshot/latest   what the PC last published (written by the PC's service account,
+//                                 which bypasses these rules; signed-in people may only read it)
+//   /owners/{o}/inbox/{eventId}   Keep/Skip/Snooze/... done on the web or phone while away from the PC
+//                                 (people may only create; the PC applies and deletes them)
+// Who may read and write: a verified Google account whose address is on the allowlist. Everything else is denied.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function allowed() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email.lower() in [__ALLOWED_EMAILS__];
+    }
+
+    function validEvent(d, eventId) {
+      return eventId.matches('^[A-Za-z0-9_-]{8,64}$')
+        && d.keys().hasAll(['entityId', 'action', 'at'])
+        && d.keys().hasOnly(['entityId', 'action', 'days', 'at', 'device'])
+        && d.entityId is string && d.entityId.size() > 0 && d.entityId.size() <= 300
+        && d.action in ['keep', 'skip', 'snooze', 'trying', 'done', 'reset']
+        && (!('days' in d) || (d.days is int && d.days >= 1 && d.days <= 90))
+        && d.at is int && d.at > 0
+        && (!('device' in d) || (d.device is string && d.device.size() <= 40));
+    }
+
+    match /owners/{o}/snapshot/{doc} {
+      allow get: if allowed() && doc == 'latest';
+    }
+
+    match /owners/{o}/inbox/{eventId} {
+      allow create: if allowed() && validEvent(request.resource.data, eventId);
+    }
+  }
+}
