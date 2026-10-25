@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { buildCloud, buildDeps, ensureToken, loadHomeConfig, resolveHome, type Cloud } from "./app.js";
 import { checkPhonePath } from "./cloud/check.js";
 import { fromTerraformOutput, writeCloudConfig } from "./cloud/config.js";
-import { lanUrls, pairCode, pairPayload, qrSvg, qrTerminal } from "./cloud/pair.js";
+import { lanUrls, pairCode, pairPayload, qrSvg, qrTerminal, webLink } from "./cloud/pair.js";
 import { lastSync } from "./cloud/sync.js";
 import { defaultConfig, type Config } from "./config.js";
 import { ClaudeCliAdapter } from "./llm/claudeCli.js";
@@ -206,7 +206,7 @@ async function main(): Promise<number> {
           const now = new Date();
           const lan = host === "0.0.0.0" ? lanUrls(port) : [];
           const code = pairCode(pairPayload({ lan, token, cloud: cloud?.cfg ?? null, now }));
-          return { code, svg: qrSvg(code), lan, cloud: !!cloud, lanReachable: lan.length > 0, expiresAt: new Date(now.getTime() + 3_600_000).toISOString() };
+          return { code, svg: qrSvg(code), lan, cloud: !!cloud, ...(cloud ? { webLink: webLink(cloud.cfg, now) } : {}), lanReachable: lan.length > 0, expiresAt: new Date(now.getTime() + 3_600_000).toISOString() };
         },
         extraHealth: () => ({ cloud: cloud ? { projectId: cloud.cfg.projectId, syncMinutes: cloud.cfg.syncMinutes, last: lastSync(db) } : null, lan: host === "0.0.0.0" }),
       });
@@ -278,6 +278,7 @@ async function main(): Promise<number> {
         console.log("  3. Cloud chưa bật: app chỉ xem được khi cùng Wi-Fi với PC. Bật cloud: xem infra/README.md");
       }
       console.log(`  Địa chỉ trong mã: ${lan.join(", ") || "(không thấy mạng LAN nào)"}`);
+      if (cloud) console.log("\nXem trên web (sau khi đã deploy, xem infra/README.md mục Web): mở liên kết này trong trình duyệt, có hạn 1 giờ, giữ riêng:\n" + webLink(cloud.cfg, new Date()));
       console.log("\nMã (dán vào app nếu không quét được; giữ riêng, ai có mã này xem và sửa được danh sách của bạn):");
       console.log(code);
       return 0;

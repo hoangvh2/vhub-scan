@@ -67,12 +67,13 @@ jobs:
           GOOGLE_OAUTH_ACCESS_TOKEN: offline-plan-not-a-real-token
         run: |
           terraform plan -input=false -refresh=false -lock=false -var project_id=vhub-trend-ci-000 -no-color | tee plan.txt
-          grep -q "Plan: 17 to add, 0 to change, 0 to destroy." plan.txt
+          grep -q "Plan: 18 to add, 0 to change, 0 to destroy." plan.txt
       - name: Install
         run: |
           npm ci
           npm ci --prefix tests
-      - name: Firestore rules and PC-phone sync against the emulators
+          npx --prefix tests playwright install --with-deps chromium
+      - name: Firestore rules, PC-phone sync and hosted dashboard against the emulators
         run: npm test --prefix tests
 
   dashboard:

@@ -7,6 +7,7 @@ locals {
     "identitytoolkit.googleapis.com", # Firebase Auth: the phone signs in with a custom token
     "securetoken.googleapis.com",     # Firebase Auth: refresh tokens
     "apikeys.googleapis.com",
+    "firebasehosting.googleapis.com", # the web dashboard (default site, created with the Firebase project)
   ]
 }
 

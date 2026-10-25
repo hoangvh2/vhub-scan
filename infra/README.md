@@ -88,6 +88,18 @@ Xong. App đọc dữ liệu PC đã đẩy lên cloud, ở đâu cũng xem đư
 
 Về mã: nó chứa "chìa khóa" Firebase để điện thoại đọc dữ liệu của bạn (app không có màn đăng nhập), nên đừng chia sẻ. PC đồng bộ sau mỗi `npm run scan` và mỗi 10 phút khi dashboard đang chạy; muốn ngay: `npm run sync`.
 
+## Bước 8. Web dashboard (tùy chọn, miễn phí)
+
+Xem và duyệt từ bất kỳ trình duyệt nào, không cần PC bật: cùng giao diện dashboard, đọc dữ liệu từ Firestore.
+
+1. Một lần: `npx firebase-tools@15 login` (đăng nhập bằng đúng tài khoản Google đã tạo project).
+2. `npm run web:deploy`: dựng trang rồi đưa lên Firebase Hosting của project trong `cloud.json`. Không lưu khoá deploy ở đâu cả. Chạy lại sau mỗi lần cập nhật giao diện.
+3. `npm run pair`: ngoài mã QR, lệnh in thêm một liên kết `https://<project>.web.app/#pair=...`. Mở liên kết đó trên trình duyệt muốn dùng (hạn 1 giờ, đừng chia sẻ). Trình duyệt nhớ phiên; lần sau mở thẳng địa chỉ web.
+
+Phần sau dấu `#` không bao giờ được gửi tới máy chủ. Nếu site mặc định của project không phải `<project>.web.app`, thêm `"webUrl": "https://..."` vào `cloud.json`.
+
+Hành vi giống app: Giữ/Bỏ/Hoãn ghi vào inbox, hiện ngay trên trang, PC áp dụng ở lần sync kế (tối đa 10 phút khi dashboard PC đang chạy, hoặc `npm run sync`). Web không chạy quét; nút đó chỉ có trên dashboard PC.
+
 ## Việc thường làm
 
 | Việc | Lệnh |
@@ -117,7 +129,7 @@ Firestore được bảo vệ chống xoá nhầm, nên `terraform destroy` sẽ
 
 | Mục | Trạng thái |
 |---|---|
-| `terraform validate`, `terraform plan` (17 resource) không cần tài khoản Google | Chạy trong CI mỗi lần push |
+| `terraform validate`, `terraform plan` (18 resource) không cần tài khoản Google | Chạy trong CI mỗi lần push |
 | Firestore rules (chủ đọc snapshot, chỉ tạo event đúng dạng; người khác bị chặn) | 7 test trên emulator, chạy trong CI |
 | PC → Firestore → điện thoại và ngược lại (REST, custom token, rules) | Test đầu-cuối trên emulator Firestore + Auth, chạy trong CI |
 | `terraform apply` trên project Google thật | **Chưa chạy** (không có tài khoản Google trong môi trường build). Lần đầu là của bạn |

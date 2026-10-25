@@ -7,7 +7,7 @@ import { checkPhonePath } from "../src/cloud/check.js";
 import { fromTerraformOutput, parseCloudConfig, type CloudConfig } from "../src/cloud/config.js";
 import { decode, encode, FirestoreRest, type DocStore, type FsDoc, type Primitive } from "../src/cloud/firestore.js";
 import { CUSTOM_TOKEN_AUD, customToken, ServiceAccountAuth, signJwt } from "../src/cloud/google.js";
-import { lanUrls, pairCode, pairPayload, qrSvg, qrTerminal } from "../src/cloud/pair.js";
+import { lanUrls, pairCode, pairPayload, qrSvg, qrTerminal, webLink } from "../src/cloud/pair.js";
 import { lastSync, syncOnce } from "../src/cloud/sync.js";
 import { runPipeline } from "../src/pipeline.js";
 import { buildSnapshot, snapshotHash } from "../src/snapshot.js";
@@ -223,6 +223,15 @@ describe("pairing", () => {
     expect(p).toMatchObject({ v: 1, lan: ["http://192.168.1.5:4173"], t: "tok", fb: { p: "vhub-trend-test", k: "AIzaTestKey0000", u: "owner" } });
     expect(parts(p.fb!.ct).valid).toBe(true);
     expect(pairPayload({ lan: [], token: "tok", cloud: null, now: NOW }).fb).toBeUndefined();
+    // The web link carries the Firebase part only (never the PC dashboard token), in the #fragment.
+    const link = webLink(cloudCfg(), NOW);
+    const [site, frag] = link.split("#pair=");
+    expect(site).toBe(`https://${cloudCfg().projectId}.web.app/`);
+    const body = JSON.parse(Buffer.from(frag!, "base64url").toString("utf8")) as { v: number; fb: { p: string }; t?: string; lan?: string[] };
+    expect(body.fb.p).toBe(cloudCfg().projectId);
+    expect(body.t).toBeUndefined();
+    expect(body.lan).toBeUndefined();
+    expect(webLink({ ...cloudCfg(), webUrl: "https://trend.example.com" }, NOW).startsWith("https://trend.example.com/#pair=")).toBe(true);
   });
   it("lists only addresses a phone can reach", () => {
     const nets = {
