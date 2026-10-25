@@ -27,8 +27,11 @@ resource "google_firebaserules_ruleset" "firestore" {
 
   source {
     files {
-      name    = "firestore.rules"
-      content = replace(file("${path.module}/../firebase/firestore.rules.tmpl"), "__ALLOWED_EMAILS__", join(", ", [for e in var.allowed_emails : "'${lower(e)}'"]))
+      name = "firestore.rules"
+      content = replace(
+        replace(file("${path.module}/../firebase/firestore.rules.tmpl"), "__ALLOWED_EMAILS__", join(", ", [for e in var.allowed_emails : "'${lower(e)}'"])),
+        "__SCAN_IDS__", join(", ", [for n in range(1, local.scans_today + 1) : "today() + '-${n}'"]),
+      )
     }
   }
 

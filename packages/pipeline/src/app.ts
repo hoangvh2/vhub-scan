@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { loadCloudConfig, type CloudConfig } from "./cloud/config.js";
 import { FirestoreRest } from "./cloud/firestore.js";
 import { ServiceAccountAuth } from "./cloud/google.js";
+import { pullDb } from "./cloud/dbsync.js";
+import { GcsRest } from "./cloud/storage.js";
 import { applyRemoteSettings, syncOnce, type SyncResult } from "./cloud/sync.js";
 import { githubSettings, loadConfig, type Config } from "./config.js";
 import { Db } from "./db.js";
@@ -75,6 +77,8 @@ export interface Cloud {
   sync: () => Promise<SyncResult>;
   /** Applies settings changes waiting in the cloud (sent from the phone) before a run, so the run uses them. */
   pullSettings: () => Promise<number>;
+  /** Takes the database the cloud scan left in the bucket, if it scanned since; no-op when the cloud scan is not set up. */
+  pullDb: () => Promise<boolean>;
 }
 
 /** Cloud sync when ~/.vhub-trend/cloud.json exists (`npm run cloud:connect`), otherwise null: the app stays PC-only. */
@@ -84,10 +88,19 @@ export function buildCloud(h: Home, d: { db: Db; store: Store; budget: Budget; l
   const auth = new ServiceAccountAuth(cfg);
   const docs = new FirestoreRest({ projectId: cfg.projectId, token: () => auth.token(), baseUrl: cfg.firestoreUrl });
   const settings = settingsStore(h);
+  const blobs = cfg.bucket ? new GcsRest({ bucket: cfg.bucket, token: () => auth.token(), baseUrl: cfg.storageUrl }) : null;
+  // The cloud scan uses the PC's own config file, so its funnel, topics and budget match the PC's.
+  const handOver = blobs ? { blobs, config: () => (existsSync(h.configFile) ? readFileSync(h.configFile, "utf8") : null) } : undefined;
   return {
     cfg,
     docs,
-    sync: () => syncOnce({ ...d, docs, uid: cfg.uid, clock: systemClock, settings }),
+    sync: () => syncOnce({ ...d, docs, uid: cfg.uid, clock: systemClock, settings, handOver }),
     pullSettings: () => applyRemoteSettings({ db: d.db, docs, uid: cfg.uid, clock: systemClock, log: d.log }, settings),
+    pullDb: async () => {
+      if (!blobs) return false;
+      const r = await pullDb(d.db, blobs);
+      if (r.pulled) d.log?.(`cloud: đã nhận kết quả quét trên cloud${r.carried ? ` (giữ ${r.carried} thao tác làm trên PC)` : ""}`);
+      return r.pulled;
+    },
   };
 }

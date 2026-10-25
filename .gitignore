@@ -17,6 +17,8 @@ data/
 *.tfvars
 !*.tfvars.example
 crash.log
+# built by npm run cloud:function (source of the cloud scan function)
+infra/build/
 # built by npm run web:build
 firebase/public/
 firebase/firestore.rules

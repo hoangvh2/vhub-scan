@@ -83,6 +83,24 @@ class ScreensTest {
         rule.onRoot().captureRoboImage("build/screenshots/phone-system-technical.png")
     }
 
+    @Test @Config(qualifiers = PHONE)
+    fun cloudScanButtonStartsAScanAndShowsRecentOnes() {
+        var started = 0
+        val base = Fixtures.ui(tab = Tab.System)
+        val day = com.vh.trend.core.ScanDay.of(Fixtures.now)
+        val scans = listOf(
+            com.vh.trend.core.CloudScan("$day-2", day, 2, Fixtures.now - 5 * 60_000, "failed", "Lỗi: Gemini API: hết tiền nạp trước (prepay). Nạp thêm trong Google AI Studio > Billing"),
+            com.vh.trend.core.CloudScan("$day-1", day, 1, Fixtures.now - 3 * 3_600_000, "done", "Xong.", 11_200, 0.0131),
+        )
+        val ui = base.copy(sync = base.sync.copy(scans = scans, today = day))
+        rule.setContent { TrendTheme { TrendApp(ui, object : UiActions { override fun startScan() { started++ } }, Fixtures.now) } }
+        rule.onNodeWithTag("scan-cloud").performScrollTo()
+        rule.onRoot().captureRoboImage("build/screenshots/phone-system-cloud-scan.png")
+        rule.onNodeWithTag("scan-cloud").performClick()
+        rule.waitForIdle()
+        assertEquals(1, started)
+    }
+
     // Destructive action (CLAUDE.md): a confirmation dialog, tested for both "Không" and the red action.
     @Test @Config(qualifiers = PHONE)
     fun signOutAsksFirstAndNoKeepsTheSession() {

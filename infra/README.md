@@ -2,13 +2,13 @@
 
 Không bắt buộc. Không làm phần này thì dashboard vẫn chạy trên PC. Làm phần này thì **web và app Android** đều xem được digest ở bất cứ đâu và bấm Giữ/Bỏ/Hoãn; PC nhận thao tác ở lần đồng bộ sau. Đăng nhập bằng **tài khoản Google**, và chỉ các địa chỉ email bạn liệt kê (`allowed_emails`) mới vào được. Không còn mã QR. Kiến trúc: [`docs/SYNC.md`](../docs/SYNC.md).
 
-Chi phí: **0 đồng**. Không cần bật billing. Mọi thứ nằm trong hạn mức miễn phí của Firebase (gói Spark). Thời gian: khoảng 25 phút, làm một lần.
+Chi phí: **0 đồng**. Không cần bật billing. Mọi thứ nằm trong hạn mức miễn phí của Firebase (gói Spark). Riêng nút "Quét bằng Gemini" (Bước 10, tùy chọn) cần gói Blaze và tính tiền Gemini. Thời gian: khoảng 25 phút, làm một lần.
 
 Mọi lệnh chạy **trên PC của bạn**. Windows: dùng PowerShell.
 
 > **Không bao giờ commit** `infra/terraform.tfvars` (có email của bạn), `infra/terraform.tfstate*` và `~/.vhub-trend/cloud.json` (khoá của PC). Các file này đã có trong `.gitignore`.
 
-Thứ tự: Bước 1–5 tạo hạ tầng, **Bước 6 bật đăng nhập Google (làm tay)**, Bước 7 nối PC, Bước 8 web, Bước 9 Android.
+Thứ tự: Bước 1–5 tạo hạ tầng, **Bước 6 bật đăng nhập Google (làm tay)**, Bước 7 nối PC, Bước 8 web, Bước 9 Android, Bước 10 quét bằng Gemini (tùy chọn, trả phí).
 
 ## Bước 1. Cài 2 công cụ (một lần)
 
@@ -118,6 +118,34 @@ App đăng nhập bằng hộp chọn tài khoản của Android và chỉ chạ
 
 APK build trước khi có biến `FIREBASE_*` hiện thông báo cấu hình thay vì nút đăng nhập.
 
+## Bước 10. Nút "Quét bằng Gemini" trên web và điện thoại (tùy chọn, trả phí)
+
+PC với Claude CLI vẫn là đường chính. Nút này để quét khi PC tắt: web hoặc app tạo một yêu cầu, Cloud Function chạy pipeline với Gemini trên bản sao database mà PC đã gửi lên bucket, rồi trả kết quả về snapshot. Tối đa `cloud_scans_per_day` lần mỗi ngày (mặc định 2, theo giờ Việt Nam), do Firestore rules chặn nên app bị sửa cũng không vượt được.
+
+Chi phí: Cloud Functions, Cloud Build, Storage nằm trong hạn mức miễn phí ở mức dùng một người, nhưng **cần gói Blaze** (gắn thẻ). Gemini tính riêng, ước tính khoảng 0,01–0,02 USD mỗi lần quét với `gemini-3.5-flash-lite` (theo bảng giá 2026-10-25; chưa đo trên project thật). Ngân sách token hằng ngày trong config của PC vẫn áp dụng cho lần quét trên cloud.
+
+1. Firebase console → **Upgrade** project lên Blaze. Nên đặt **Budget alert** (Billing → Budgets & alerts, ví dụ 2 USD/tháng).
+2. [Google AI Studio](https://aistudio.google.com/apikey) → tạo API key (nên chọn chính project này) và bật billing cho key. Nếu dùng trả trước: nạp 5 USD và **tắt auto-reload**, hết tiền thì Gemini trả lỗi 402 và lần quét báo thất bại, không phát sinh thêm.
+3. `infra/terraform.tfvars` thêm:
+   ```hcl
+   cloud_scan     = true
+   gemini_api_key = "AIza..."   # chỉ được ghi vào Secret Manager, không nằm trong terraform.tfstate hay plan
+   # cloud_scans_per_day = 2    # 0 = tắt nút (kill switch), tối đa 5
+   # gemini_model        = "gemini-3.5-flash-lite"
+   ```
+   Không muốn để key trong file: bỏ dòng `gemini_api_key` và chạy `TF_VAR_gemini_api_key=AIza... terraform apply`. Cần Terraform ≥ 1.11.
+4. Ở thư mục gốc repo: `npm run cloud:function` (đóng gói code function vào `infra/build/`, không commit).
+5. `cd infra && terraform apply`. Lần đầu mất khoảng 3–5 phút (bật API, build function).
+6. `cd .. && npm run cloud:connect` (để PC biết bucket), rồi `npm run sync`: PC gửi database và config lên bucket. Từ đây mỗi lần sync PC lấy kết quả quét trên cloud về trước, rồi mới gửi bản của mình lên.
+7. Web hoặc app → tab **Hệ thống** → **Quét bằng Gemini**. Kết quả (token, chi phí, số mục) hiện trong danh sách lần quét.
+
+| Việc | Cách làm |
+|---|---|
+| Tắt nút ngay | `cloud_scans_per_day = 0` → `terraform apply` (rules từ chối mọi yêu cầu mới) |
+| Đổi key Gemini | Sửa `gemini_api_key`, tăng `gemini_api_key_version` (ví dụ 2) → `terraform apply`. Thiếu bước tăng version thì Terraform không ghi key mới |
+| Cập nhật code function | `npm run cloud:function` → `terraform apply` |
+| Gỡ tính năng | `cloud_scan = false` → `terraform apply`. Bucket có dữ liệu sẽ không bị xoá tự động (xoá tay trong Cloud Storage nếu muốn) |
+
 ## Việc thường làm
 
 | Việc | Cách làm |
@@ -142,6 +170,12 @@ APK build trước khi có biến `FIREBASE_*` hiện thông báo cấu hình th
 | Nút Google không hiện, hoặc cửa sổ Google báo `origin_mismatch` | Thiếu địa chỉ web trong **Authorized JavaScript origins** (Bước 6, mục 4); đợi vài phút |
 | "Tài khoản … không nằm trong danh sách được phép" | Thêm địa chỉ vào `allowed_emails`, `terraform apply`; hoặc đăng nhập tài khoản khác |
 | Web/app: "PC chưa đẩy dữ liệu lên cloud" | Trên PC chạy `npm run sync` |
+| `Error 403 ... eventarc` / `Cloud Build ... permission` khi apply Bước 10 | Quyền vừa cấp cần vài phút để có hiệu lực; chạy lại `terraform apply` |
+| `Billing account ... not found` / `requires billing` khi apply Bước 10 | Chưa lên gói Blaze (Bước 10, mục 1) |
+| Lần quét báo "PC chưa gửi dữ liệu lên cloud" | Chạy `npm run cloud:connect` rồi `npm run sync` trên PC (Bước 10, mục 6) |
+| Lần quét báo "PC vừa cập nhật dữ liệu trong lúc quét" | PC sync đúng lúc cloud đang quét; kết quả cloud bị bỏ để không ghi đè. Bấm quét lại (vẫn tính một lượt) |
+| Lần quét thất bại với `402` | Hết tiền trả trước ở AI Studio |
+| "Hết lượt quét hôm nay" | Đã dùng đủ `cloud_scans_per_day` lần; lượt mới từ 0 giờ (giờ Việt Nam) |
 | Android: `Đăng nhập Google không thành công (TYPE_NO_CREDENTIAL…)` hoặc lỗi 16 | SHA-1 của APK chưa đăng ký (Bước 9, mục 2), `FIREBASE_WEB_CLIENT_ID` sai, hoặc vừa apply (đợi vài phút); máy cần có tài khoản Google và Google Play services |
 
 ## Gỡ bỏ
@@ -158,4 +192,7 @@ Firestore được bảo vệ chống xoá nhầm, nên `terraform destroy` sẽ
 | Trang web: đăng nhập, bị từ chối, đọc dữ liệu, bấm Giữ tới PC, phiên còn sau khi tải lại, đăng xuất có xác nhận | Chromium thật + emulator, chạy trong CI. **Hộp đăng nhập của Google được thay bằng bản giả**: chưa thử với Google thật |
 | Lõi Android (đổi token Google lấy phiên Firebase, quyền, hàng đợi offline) | 13 test JVM, chạy trong CI |
 | Màn hình Android (đăng nhập, bị từ chối, chưa cấu hình, đăng xuất có xác nhận) | Robolectric trong CI. **Chưa cài trên điện thoại thật; chưa thử hộp chọn tài khoản Google thật** |
+| Quét bằng Gemini: giới hạn lượt/ngày trong rules, nút trên web tạo yêu cầu và function chạy pipeline trên bản sao database, hai lượt rồi "Hết lượt" | Rules + web trên emulator (Chromium thật), function chạy với LLM giả. **Chưa gọi Gemini thật, chưa deploy Cloud Function thật** |
+| Trao database PC ↔ bucket (không mất thao tác của PC, không ghi đè khi hai bên cùng ghi) | Test với bucket giả có kiểm tra generation như GCS |
+| `terraform plan` với `cloud_scan = true` (44 resource, key không xuất hiện trong plan) | CI |
 | `terraform apply` trên project Google thật, bật Google ở Firebase, SHA-1 | **Chưa chạy** (không có tài khoản Google trong môi trường build). Lần đầu là của bạn |

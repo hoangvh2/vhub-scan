@@ -4,7 +4,9 @@ import { USER_ACTIONS, type Clock, type UserAction } from "../model.js";
 import { buildSnapshot, snapshotHash, SNAPSHOT_SCHEMA } from "../snapshot.js";
 import type { SettingsStore } from "../settingsStore.js";
 import type { Store } from "../store.js";
+import { pullDb, pushDb, type HandOverResult } from "./dbsync.js";
 import type { DocStore, FsDoc } from "./firestore.js";
+import type { BlobStore } from "./storage.js";
 
 export interface SyncResult {
   at: string;
@@ -18,6 +20,8 @@ export interface SyncResult {
   bytes: number;
   /** Settings changes from the phone or hosted page applied in this sync. */
   settingsApplied?: number;
+  /** Database hand-over with the cloud scan, when it is set up. */
+  db?: HandOverResult;
   error?: string;
 }
 
@@ -42,6 +46,8 @@ export interface SyncDeps {
   clock: Clock;
   /** When set, settings changes from the phone are applied to config.json and the settings travel in the snapshot. */
   settings?: SettingsStore;
+  /** The bucket the cloud scan shares the database through, and the config text it should scan with. */
+  handOver?: { blobs: BlobStore; config: () => string | null };
   log?: (m: string) => void;
 }
 
@@ -60,6 +66,8 @@ export async function syncOnce(d: SyncDeps): Promise<SyncResult> {
   const now = d.clock.now();
   const res: SyncResult = { at: now.toISOString(), ok: false, applied: 0, rejected: 0, pushed: false, bytes: 0 };
   try {
+    // The cloud's copy first: phone actions and the snapshot below must apply to the newest data.
+    const pulled = d.handOver ? await pullDb(d.db, d.handOver.blobs) : null;
     const events = await d.docs.list(`owners/${d.uid}/inbox`);
     const done: string[] = [];
     for (const e of [...events].sort(byTime)) {
@@ -70,28 +78,39 @@ export async function syncOnce(d: SyncDeps): Promise<SyncResult> {
     }
     if (done.length) await d.docs.remove(done);
     if (d.settings) res.settingsApplied = await applyRemoteSettings(d, d.settings);
-
-    const snap = buildSnapshot(d.db, d.store, d.budget, now, { settings: d.settings ? { ...d.settings.view(), remote: lastRemoteSettings(d.db) } : undefined });
-    const hash = snapshotHash(snap);
-    const payload = JSON.stringify(snap);
-    res.bytes = Buffer.byteLength(payload);
-    if (hash !== d.db.kvGet(HASH)) {
-      await d.docs.set(`owners/${d.uid}/snapshot/latest`, { schema: SNAPSHOT_SCHEMA, generatedAt: snap.generatedAt, day: snap.day, payload });
-      d.db.kvSet(HASH, hash);
-      res.pushed = true;
+    if (d.handOver) {
+      const pushed = await pushDb(d.db, d.handOver.blobs, d.handOver.config());
+      res.db = { pulled: !!pulled?.pulled || pushed.pulled, pushed: pushed.pushed, carried: (pulled?.carried ?? 0) + pushed.carried };
     }
+
+    const pub = await publishSnapshot(d, now);
+    res.bytes = pub.bytes;
+    res.pushed = pub.pushed;
     res.ok = true;
   } catch (e) {
     res.error = (e instanceof Error ? e.message : String(e)).slice(0, 300);
   }
   d.db.kvSet(LAST, JSON.stringify(res));
-  d.log?.(`sync: ${res.ok ? "ok" : "LỖI " + res.error} · áp dụng ${res.applied} thao tác từ điện thoại · ${res.pushed ? "đã đẩy" : "không đổi"} snapshot (${Math.round(res.bytes / 1024)} KB)`);
+  const hand = res.db ? ` · dữ liệu cloud: ${res.db.pulled ? "đã nhận lần quét trên cloud" : "không có gì mới"}${res.db.pushed ? ", đã gửi bản mới" : ""}` : "";
+  d.log?.(`sync: ${res.ok ? "ok" : "LỖI " + res.error} · áp dụng ${res.applied} thao tác từ điện thoại · ${res.pushed ? "đã đẩy" : "không đổi"} snapshot (${Math.round(res.bytes / 1024)} KB)${hand}`);
   return res;
 }
 
-const byTime = (a: FsDoc, b: FsDoc): number => Number(a.fields.at ?? 0) - Number(b.fields.at ?? 0) || a.id.localeCompare(b.id);
+/** Uploads the current view (owners/{uid}/snapshot/latest) when its content changed since the last upload. */
+export async function publishSnapshot(d: Pick<SyncDeps, "db" | "store" | "budget" | "docs" | "uid" | "settings">, now: Date): Promise<{ pushed: boolean; bytes: number }> {
+  const snap = buildSnapshot(d.db, d.store, d.budget, now, { settings: d.settings ? { ...d.settings.view(), remote: lastRemoteSettings(d.db) } : undefined });
+  const hash = snapshotHash(snap);
+  const payload = JSON.stringify(snap);
+  const bytes = Buffer.byteLength(payload);
+  if (hash === d.db.kvGet(HASH)) return { pushed: false, bytes };
+  await d.docs.set(`owners/${d.uid}/snapshot/latest`, { schema: SNAPSHOT_SCHEMA, generatedAt: snap.generatedAt, day: snap.day, payload });
+  d.db.kvSet(HASH, hash);
+  return { pushed: true, bytes };
+}
 
-function applyEvent(d: SyncDeps, e: FsDoc, now: Date): "applied" | "rejected" | "duplicate" {
+export const byTime = (a: FsDoc, b: FsDoc): number => Number(a.fields.at ?? 0) - Number(b.fields.at ?? 0) || a.id.localeCompare(b.id);
+
+export function applyEvent(d: Pick<SyncDeps, "db" | "store">, e: FsDoc, now: Date): "applied" | "rejected" | "duplicate" {
   if (d.db.get("SELECT 1 FROM cloud_event WHERE id = ?", e.id)) return "duplicate";
   const entityId = typeof e.fields.entityId === "string" ? e.fields.entityId : "";
   const action = typeof e.fields.action === "string" ? e.fields.action : "";

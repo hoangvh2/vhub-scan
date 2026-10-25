@@ -10,3 +10,8 @@ allowed_emails = ["you@gmail.com"]
 
 # firestore_location = "asia-southeast1"
 # create_pc_key      = true
+
+# Optional, paid: "Quét bằng Gemini" button on the web and the phone; see infra/README.md step 10
+# cloud_scan          = true
+# gemini_api_key      = "AIza..."   # stored only in Secret Manager (write-only), never in terraform.tfstate
+# cloud_scans_per_day = 2           # 0 switches the button off

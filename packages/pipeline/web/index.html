@@ -315,7 +315,9 @@ dialog.confirm .row{display:flex;justify-content:space-between;gap:10px}
 }
 body.dirty #toast{bottom:calc(76px + env(safe-area-inset-bottom))}
 @media (prefers-reduced-motion:reduce){.detail{transition:none}}
-.hosted #runnow, .hosted #runnow2 { display: none; }
+.scans{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.scans li{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:baseline;font-size:12.5px}
+.scans li .msg{grid-column:2;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -416,6 +418,9 @@ const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } },
   set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
+/** Day number in Vietnam time (UTC+7): the same as the Firestore rules and scanDay() in the pipeline. */
+const scanDay = (ms) => Math.floor((ms + 7 * 3600000) / 86400000);
+const SCAN_STATUS = { running: "Đang quét", done: "Xong", failed: "Lỗi", refused: "Bị từ chối" };
 const cloud = {
   session: store.get("vhSession"), snap: null, snapAt: 0,
   gsi: null,
@@ -522,6 +527,36 @@ const cloud = {
     store.set("vhSettingsPending", { id, at, patch });
     return { ok: true, pending: true };
   },
+  /** Recent "Quét bằng Gemini" requests, newest first (owners/{uid}/runRequests; the cloud function writes the outcome). */
+  async scans() {
+    const idt = await this.idToken();
+    const r = await fetch(`${this.docs()}/runRequests?pageSize=50`, { headers: { authorization: "Bearer " + idt } });
+    if (r.status === 401 || r.status === 403) throw new Error("Cloud không cho đọc lịch sử quét. Cập nhật rules: chạy terraform apply trong infra.");
+    if (!r.ok) throw new Error("Cloud trả lỗi " + r.status);
+    const j = await r.json();
+    const val = (f) => f == null ? null : f.stringValue ?? (f.integerValue != null ? Number(f.integerValue) : f.doubleValue ?? null);
+    return (j.documents || []).map((d) => {
+      const id = d.name.slice(d.name.lastIndexOf("/") + 1), f = d.fields || {}, m = /^(\d+)-(\d+)$/.exec(id);
+      return { id, day: m ? Number(m[1]) : -1, n: m ? Number(m[2]) : 0, at: val(f.at), status: val(f.status), message: val(f.message), tokens: val(f.tokens), costUsd: val(f.costUsd), finishedAt: val(f.finishedAt) };
+    }).sort((a, b) => b.day - a.day || b.n - a.n);
+  },
+  /**
+   * Starts a cloud scan: the next free slot of today, {day}-{n}. The Firestore rules accept only today's first
+   * SCANS_PER_DAY slots, so a refusal here means the day's limit is reached (or the cloud scan is switched off).
+   */
+  async startScan() {
+    const day = scanDay(Date.now()), list = await this.scans(), today = list.filter((x) => x.day === day);
+    const busy = list.find((x) => (!x.status || x.status === "running") && Date.now() - (x.at || 0) < 12 * 60000);
+    if (busy) return { started: false, reason: "Đang có một lần quét trên cloud. Đợi nó xong (vài phút)." };
+    const n = today.reduce((m, x) => Math.max(m, x.n), 0) + 1;
+    const idt = await this.idToken();
+    const fields = { at: { integerValue: String(Date.now()) }, device: { stringValue: "web" } };
+    const r = await fetch(`${this.docs()}/runRequests?documentId=${day}-${n}`, { method: "POST", headers: { authorization: "Bearer " + idt, "content-type": "application/json" }, body: JSON.stringify({ fields }) });
+    if (r.status === 403) return { started: false, reason: `Hết lượt quét hôm nay (đã dùng ${today.length}), hoặc quét trên cloud đang tắt. Lượt mới từ 0 giờ.` };
+    if (r.status === 409) return { started: false, reason: "Lượt này vừa được dùng ở thiết bị khác. Thử lại." };
+    if (!r.ok) throw new Error("Cloud trả lỗi " + r.status);
+    return { started: true, id: `${day}-${n}`, used: n };
+  },
   /** The settings form from the snapshot, with a change that the PC has not applied yet shown on top. */
   settingsPage() {
     const st = this.snap.settings;
@@ -539,6 +574,7 @@ async function cloudApi(path, opt) {
     if (u.pathname === "/api/feedback") { const b = JSON.parse(opt.body); await cloud.snapshot(); return cloud.send(b.id, b.action, b.days); }
     if (u.pathname === "/api/settings") { const b = JSON.parse(opt.body); await cloud.snapshot(); return cloud.sendSettings(b.patch, b.baseRev); }
     if (u.pathname.startsWith("/api/settings/")) throw new Error("Chỉ làm được trên dashboard của PC.");
+    if (u.pathname === "/api/run") return cloud.startScan();
     return { started: false, reason: "chạy quét trên PC" };
   }
   await cloud.snapshot(u.pathname === "/api/settings");
@@ -651,16 +687,57 @@ function renderStatus() {
     h("div", { class: "row", title: r && r.error ? r.error : null }, h("span", { class: "dot " + cls }), h("span", { class: "txt" }, runText)),
     sync && h("div", { class: "row" }, h("span", { class: "dot " + (s.cloud.last && !s.cloud.last.ok ? "bad" : s.cloud.last ? "ok" : "") }), h("span", { class: "txt" }, sync)),
     h("div", { class: "tok" }, h("div", { class: "row" }, h("span", {}, "Token hôm nay"), h("span", { class: "num", style: "margin-left:auto" }, pct + "%")), h("div", { class: "meter" + (pct > 85 ? " hot" : "") }, h("i", { style: `width:${pct}%` }))),
-    h("button", { class: "btn", id: "runnow", onclick: runNow, title: "Chạy ngay một lần quét" }, icon("run"), h("span", { class: "txt" }, "Chạy ngay")),
+    h("button", { class: "btn", id: "runnow", onclick: runNow, title: CLOUD ? "Quét trên cloud bằng Gemini (giới hạn mỗi ngày), không cần PC bật" : "Chạy ngay một lần quét" }, icon("run"), h("span", { class: "txt" }, CLOUD ? "Quét bằng Gemini" : "Chạy ngay")),
   );
   $("#topstatus").replaceChildren(h("span", { class: "dot " + cls }), runText);
 }
 async function runNow() {
+  if (CLOUD) return scanOnCloud();
   try {
     const r = await api("/api/run", { method: "POST", body: "{}" });
     toast(r.started ? "Đã bắt đầu quét. Danh sách tự cập nhật khi xong." : "Chưa chạy được: " + (r.reason === "already running" ? "đang có lần quét khác" : r.reason || "không rõ"));
     if (r.started) poll();
   } catch (e) { toast(e.message); }
+}
+/** Hosted page: starts a Gemini scan on the cloud and follows it until the function reports the outcome. */
+async function scanOnCloud() {
+  const btn = $("#runnow");
+  try {
+    if (btn) btn.disabled = true;
+    const r = await cloud.startScan();
+    if (!r.started) return toast(r.reason);
+    toast(`Đã bắt đầu quét bằng Gemini (lượt ${r.used} hôm nay). Thường mất 1–3 phút.`);
+    followScan(r.id, Date.now());
+  } catch (e) { toast(e.message); }
+  finally { if (btn) btn.disabled = false; }
+}
+function followScan(id, since) {
+  clearTimeout(followScan.t);
+  followScan.t = setTimeout(async () => {
+    let it = null;
+    try { it = (await cloud.scans()).find((x) => x.id === id); } catch {}
+    const final = it && it.status && it.status !== "running";
+    if (!final && Date.now() - since < 12 * 60000) return followScan(id, since);
+    if (it && it.status === "done") { await cloud.snapshot(true).catch(() => null); toast(it.message || "Quét xong."); }
+    else toast(it && it.message ? it.message : "Chưa thấy kết quả lần quét trên cloud. Xem Hệ thống > Quét bằng Gemini.");
+    load({ keepIndex: true });
+  }, 8000);
+}
+function scanPanel() {
+  const box = h("div", {}, h("p", { class: "hint" }, "Đang tải…"));
+  cloud.scans().then((list) => {
+    const day = scanDay(Date.now()), today = list.filter((x) => x.day === day).length;
+    box.replaceChildren(
+      h("p", { class: "hint" }, `Quét trên cloud khi PC tắt. Hôm nay đã dùng ${today} lượt (giới hạn do cloud_scans_per_day trong infra/terraform.tfvars). Kết quả về PC ở lần đồng bộ kế tiếp.`),
+      list.length ? h("ul", { class: "scans num" }, list.slice(0, 6).map((x) => h("li", {},
+        h("span", { class: "dot " + (x.status === "done" ? "ok" : x.status === "failed" || x.status === "refused" ? "bad" : "run") }),
+        h("span", {}, `${x.at ? new Date(x.at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : x.id} · ${SCAN_STATUS[x.status] || "Đang chờ"}${x.costUsd != null ? ` · ${fmt.format(x.tokens || 0)} token · $${Number(x.costUsd).toFixed(4)}` : ""}`),
+        x.message && x.status !== "done" ? h("span", { class: "msg" }, x.message) : null))) : h("p", { class: "hint" }, "Chưa quét trên cloud lần nào."),
+      h("button", { class: "btn sm", id: "scan-cloud", style: "justify-self:start", onclick: scanOnCloud }, icon("run"), h("span", {}, "Quét bằng Gemini")));
+  }).catch((e) => box.replaceChildren(h("div", { class: "alert bad" }, e.message)));
+  const p = panel("Quét bằng Gemini", box);
+  p.id = "cloudscan";
+  return p;
 }
 function poll() { clearTimeout(poll.t); poll.t = setTimeout(async () => { await load({ keepIndex: true }); if (ui.health && ui.health.lastRun && ui.health.lastRun.status === "running") poll(); }, 8000); }
 
@@ -857,7 +934,7 @@ async function renderSystem(v) {
     h("div", { class: "tile" + (s.cloud && s.cloud.last && !s.cloud.last.ok ? " bad" : "") }, h("small", {}, "Đồng bộ cloud"), h("b", {}, s.cloud ? (s.cloud.last ? (s.cloud.last.ok ? ago(s.cloud.last.at) : "Lỗi") : "Chưa đồng bộ") : "Chưa bật")),
     h("div", { class: "tile" }, h("small", {}, "AI hôm nay"), h("b", { class: "num" }, pct + "%"), h("div", { class: "meter" + (pct > 85 ? " hot" : "") }, h("i", { style: `width:${pct}%` }))));
   const alerts = [r && r.error ? h("div", { class: "alert bad" }, r.error) : null, st.sourceErrors && st.sourceErrors.length ? h("div", { class: "alert bad" }, "Lỗi nguồn: " + st.sourceErrors.join("; ")) : null].filter(Boolean);
-  v.replaceChildren(h("div", { class: "sys" }, tiles, ...alerts, pairPanel,
+  v.replaceChildren(h("div", { class: "sys" }, tiles, ...alerts, CLOUD ? scanPanel() : null, pairPanel,
     h("details", { class: "more" }, h("summary", {}, "Chi tiết kỹ thuật"), h("div", { class: "grid" }, ...panels))));
   renderDetail();
 }
@@ -1170,6 +1247,7 @@ async function load(o = {}) {
 $("#q").addEventListener("input", () => { clearTimeout(load.t); load.t = setTimeout(() => load(), 220); });
 $("#closesheet").addEventListener("click", () => closeSheet());
 $("#runnow2").addEventListener("click", runNow);
+if (CLOUD) $("#runnow2").setAttribute("aria-label", "Quét bằng Gemini");
 document.addEventListener("keydown", (ev) => {
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
   if (ev.target.closest("input, textarea, select")) { if (ev.key === "Escape") ev.target.blur(); return; }

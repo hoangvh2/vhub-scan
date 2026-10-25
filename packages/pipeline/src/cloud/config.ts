@@ -15,6 +15,10 @@ export interface CloudConfig {
   authUrl?: string;
   /** Google sign-in Client ID ("Web client (auto created by Google Service)"); baked into the hosted dashboard. */
   webClientId?: string;
+  /** Bucket the cloud scan (Gemini) shares the database through. Unset = the cloud scan is not set up. */
+  bucket?: string;
+  /** Cloud Storage emulator or test endpoint. */
+  storageUrl?: string;
 }
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -37,6 +41,8 @@ export function parseCloudConfig(json: string): CloudConfig {
     ...(raw.firestoreUrl ? { firestoreUrl: raw.firestoreUrl } : {}),
     ...(raw.authUrl ? { authUrl: raw.authUrl } : {}),
     ...(typeof raw.webClientId === "string" && /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(raw.webClientId) ? { webClientId: raw.webClientId } : {}),
+    ...(typeof raw.bucket === "string" && /^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$/.test(raw.bucket) ? { bucket: raw.bucket } : {}),
+    ...(raw.storageUrl ? { storageUrl: raw.storageUrl } : {}),
   };
 }
 
@@ -64,6 +70,6 @@ export function fromTerraformOutput(json: string): CloudConfig {
   }
   const sa = JSON.parse(Buffer.from(keyB64, "base64").toString("utf8")) as { client_email?: string; private_key?: string };
   return parseCloudConfig(
-    JSON.stringify({ projectId: v("project_id"), apiKey: v("api_key"), uid: v("owner_uid") ?? "owner", serviceAccount: sa, syncMinutes: 10, webClientId: v("web_client_id") || undefined }),
+    JSON.stringify({ projectId: v("project_id"), apiKey: v("api_key"), uid: v("owner_uid") ?? "owner", serviceAccount: sa, syncMinutes: 10, webClientId: v("web_client_id") || undefined, bucket: v("data_bucket") || undefined }),
   );
 }

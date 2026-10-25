@@ -13,7 +13,8 @@ export function signJwt(privateKeyPem: string, claims: Record<string, unknown>):
 }
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const SCOPE = "https://www.googleapis.com/auth/datastore";
+// Firestore, and the bucket the cloud scan shares the database through (infra/scan.tf grants the bucket only).
+const SCOPE = "https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/devstorage.read_write";
 /** OAuth access token for Firestore from the service-account key (JWT bearer grant), cached until shortly before expiry. */
 export class ServiceAccountAuth {
   private cached: { token: string; until: number } | null = null;
@@ -47,6 +48,32 @@ export class ServiceAccountAuth {
     if (!r.ok || !j.access_token) {
       throw new Error(`Google từ chối khoá của PC (${r.status} ${j.error ?? ""}${j.error_description ? ": " + j.error_description : ""}). Khoá có thể đã bị xoá; chạy lại  terraform apply  rồi  npm run cloud:connect`);
     }
+    this.cached = { token: j.access_token, until: t + Math.max(60, (j.expires_in ?? 3600) - 120) * 1000 };
+    return j.access_token;
+  }
+}
+
+/**
+ * Access token of the service account a Cloud Function runs as, from the metadata server (no key file exists there).
+ * Cached until shortly before expiry.
+ */
+export class MetadataAuth {
+  private cached: { token: string; until: number } | null = null;
+
+  constructor(
+    private readonly fetchImpl: FetchLike = fetch,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+
+  async token(): Promise<string> {
+    const t = this.now().getTime();
+    if (this.cached && t < this.cached.until) return this.cached.token;
+    const r = await this.fetchImpl("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", {
+      headers: { "Metadata-Flavor": "Google" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const j = (await r.json().catch(() => ({}))) as { access_token?: string; expires_in?: number };
+    if (!r.ok || !j.access_token) throw new Error(`metadata server không cấp token (${r.status})`);
     this.cached = { token: j.access_token, until: t + Math.max(60, (j.expires_in ?? 3600) - 120) * 1000 };
     return j.access_token;
   }

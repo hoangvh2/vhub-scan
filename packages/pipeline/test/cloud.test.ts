@@ -83,7 +83,7 @@ describe("service-account access token", () => {
     expect(calls).toHaveLength(1);
     const form = new URLSearchParams(calls[0]!.body);
     expect(form.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:jwt-bearer");
-    expect(parts(form.get("assertion")!).body).toMatchObject({ scope: "https://www.googleapis.com/auth/datastore", aud: "https://oauth2.googleapis.com/token" });
+    expect(parts(form.get("assertion")!).body).toMatchObject({ scope: "https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/devstorage.read_write", aud: "https://oauth2.googleapis.com/token" });
   });
   it("explains a rejected key", async () => {
     const f = (async () => new Response(JSON.stringify({ error: "invalid_grant", error_description: "Invalid JWT Signature." }), { status: 400 })) as unknown as typeof fetch;
