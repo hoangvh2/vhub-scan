@@ -13,10 +13,12 @@ rules_version = '2';
 //                                 string; the PC validates every value against its settings catalogue and refuses
 //                                 settings marked PC-only (the Claude command, the port) before writing config.json
 //   /owners/{o}/runRequests/{day}-{n}  "Quét bằng Gemini" pressed on the web or phone (create only; the cloud scan
-//                                 function writes the outcome onto it). Only n = 1..scans per day for today's day
-//                                 number (Vietnam time) is accepted, so the daily limit holds even without the apps.
-//                                 The list of ids is substituted for the double-underscore placeholder in
-//                                 validScanRequest() (Terraform: var.cloud_scans_per_day; 0 = switched off).
+//                                 function writes the outcome onto it). Ids are today's day number (Vietnam time) and
+//                                 n = 1, 2, ... in order. A request uses one of the day's scans unless it failed, was
+//                                 refused, or got no answer within 15 minutes; up to 3 extra ids allow trying again
+//                                 after such failures. So the daily limit holds even without the apps. The scans per
+//                                 day and the list of ids are substituted for the double-underscore placeholders
+//                                 (Terraform: var.cloud_scans_per_day; 0 = switched off).
 // Who may read and write: a verified Google account whose address is on the allowlist. Everything else is denied.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -54,12 +56,39 @@ service cloud.firestore {
       return string(int(math.floor((request.time.toMillis() + 25200000) / 86400000)));
     }
 
-    function validScanRequest(d, id) {
+    // Whether request {id} uses one of the day's scans: done, or still waiting or running and under 15 minutes old
+    // (the same rule as scanUses() in packages/pipeline/src/cloud/scanJob.ts). Failed, refused and stuck ones do not.
+    function scanUses(o, id) {
+      let r = get(/databases/$(database)/documents/owners/$(o)/runRequests/$(id)).data;
+      let s = r.get('status', 'waiting');
+      return s == 'done' || (s in ['waiting', 'running'] && r.at > request.time.toMillis() - 900000);
+    }
+
+    // How many of today's requests 1..n-1 use a scan (at most 8 ids exist: 5 scans per day + 3 retries).
+    function scansUsedBefore(o, n) {
+      return (n > 1 && scanUses(o, today() + '-1') ? 1 : 0)
+        + (n > 2 && scanUses(o, today() + '-2') ? 1 : 0)
+        + (n > 3 && scanUses(o, today() + '-3') ? 1 : 0)
+        + (n > 4 && scanUses(o, today() + '-4') ? 1 : 0)
+        + (n > 5 && scanUses(o, today() + '-5') ? 1 : 0)
+        + (n > 6 && scanUses(o, today() + '-6') ? 1 : 0)
+        + (n > 7 && scanUses(o, today() + '-7') ? 1 : 0);
+    }
+
+    function validScanRequest(o, d, id) {
       return id in [__SCAN_IDS__]
         && d.keys().hasAll(['at'])
         && d.keys().hasOnly(['at', 'device'])
-        && d.at is int && d.at > 0
-        && (!('device' in d) || (d.device is string && d.device.size() <= 40));
+        && d.at is int && d.at > request.time.toMillis() - 600000 && d.at < request.time.toMillis() + 600000
+        && (!('device' in d) || (d.device is string && d.device.size() <= 40))
+        && scanSlotFree(o, int(id.split('-')[1]));
+    }
+
+    // Ids are taken in order, and a new one only while fewer than the day's scans are used.
+    function scanSlotFree(o, n) {
+      return n == 1
+        || (exists(/databases/$(database)/documents/owners/$(o)/runRequests/$(today() + '-' + string(n - 1)))
+            && scansUsedBefore(o, n) < __SCANS_PER_DAY__);
     }
 
     match /owners/{o}/snapshot/{doc} {
@@ -76,7 +105,7 @@ service cloud.firestore {
 
     match /owners/{o}/runRequests/{id} {
       allow get, list: if allowed();
-      allow create: if allowed() && validScanRequest(request.resource.data, id);
+      allow create: if allowed() && validScanRequest(o, request.resource.data, id);
     }
   }
 }

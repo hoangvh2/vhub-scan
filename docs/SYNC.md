@@ -109,9 +109,11 @@ web / app ──tạo──▶ owners/{uid}/runRequests/{day}-{n}
 | `message`, `startedAt`, `finishedAt`, `model` | function | string |
 | `tokens`, `costUsd`, `llmCalls`, `triaged`, `carded`, `digest` | function | số (chỉ khi `done`) |
 
-- `id` = `{day}-{n}`, với `day = floor((ms + 7h) / 86 400 000)` (ngày theo giờ Việt Nam) và `n` = 1..`cloud_scans_per_day`. Rules chỉ cho **tạo** đúng các id của hôm nay, không cho sửa hay xoá, nên mỗi ngày tối đa `cloud_scans_per_day` yêu cầu dù client bị sửa. `cloud_scans_per_day = 0` chặn mọi yêu cầu mới.
-- Function kiểm tra lại id theo đồng hồ của nó; chạy đúng một lần cho mỗi yêu cầu (sự kiện lặp bị bỏ qua vì đã có `status`); không tự chạy lại khi lỗi; tối đa một lần quét cùng lúc. Yêu cầu cũ hơn 14 ngày bị xoá.
-- Client coi một yêu cầu không có `status`, hoặc `running` chưa quá 12 phút, là đang chạy và không cho bấm thêm.
+- `id` = `{day}-{n}`, với `day = floor((ms + 7h) / 86 400 000)` (ngày theo giờ Việt Nam) và `n` = 1, 2, … theo thứ tự (phải có `n-1` mới tạo được `n`), tối đa `cloud_scans_per_day + 3`. Rules chỉ cho **tạo** (không sửa, không xoá), `at` phải lệch giờ máy chủ dưới 10 phút, và chỉ khi số lượt **đang dùng** trong các id trước < `cloud_scans_per_day`. `cloud_scans_per_day = 0` chặn mọi yêu cầu mới.
+- Một lượt **đang dùng** hạn mức khi `status` là `done`, hoặc chưa có `status`/`running` và `at` chưa quá 15 phút. Lượt `failed`, `refused`, hoặc quá 15 phút không có kết quả ("Quá thời gian") không tính, nên bấm lại được; 3 id dự phòng mỗi ngày giới hạn số lần thử lại (chi phí tối đa mỗi ngày = `cloud_scans_per_day + 3` lần quét). Rules (`scanUses`), function (`scanUses` trong `scanJob.ts`), web và Android dùng cùng quy tắc.
+- Function kiểm tra lại id và hạn mức theo đồng hồ của nó; đóng các lượt cũ hơn 15 phút chưa có kết quả thành `failed`; chạy đúng một lần cho mỗi yêu cầu (sự kiện lặp bị bỏ qua vì đã có `status`); không tự chạy lại khi lỗi; tối đa một lần quét cùng lúc. Lỗi bất kỳ (kể cả trước khi bắt đầu) được ghi lên yêu cầu với `status = failed`. Yêu cầu cũ hơn 14 ngày bị xoá.
+- Function được đăng ký là CloudEvent function (`entry.js` do `npm run cloud:function` tạo). Nếu chạy như HTTP function, sự kiện Firestore bị bỏ qua và yêu cầu đứng ở "Đang chờ".
+- Client coi một yêu cầu chưa có `status` hoặc `running` dưới 15 phút là đang chạy và không cho bấm thêm.
 
 ### Trao database giữa PC và cloud
 

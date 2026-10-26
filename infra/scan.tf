@@ -3,7 +3,7 @@
 # (pay-as-you-go) plan: Cloud Functions, Cloud Build and Cloud Storage do not exist on Spark. At one person's use it
 # stays inside the free tiers; the Gemini API is billed separately (see docs/SYNC.md, "Quét trên cloud").
 #
-#   web/phone ──create──▶ Firestore owners/{uid}/runRequests/{day}-{n}   (rules: n <= cloud_scans_per_day, today only)
+#   web/phone ──create──▶ Firestore owners/{uid}/runRequests/{day}-{n}   (rules: today only, failed scans not counted)
 #                              │ Eventarc "document created"
 #                              ▼
 #                      Cloud Function "vhub-trend-scan"  ──▶ Gemini API (key from Secret Manager)
@@ -14,6 +14,8 @@ locals {
   scan        = var.cloud_scan
   scan_region = var.firestore_location # Firestore triggers fire in the database's region
   scans_today = local.scan ? var.cloud_scans_per_day : 0
+  # Request ids per day: the scans plus 3 retries after failed scans (SCAN_RETRIES in firebase/gen-rules.mjs).
+  scan_ids = local.scans_today == 0 ? 0 : local.scans_today + 3
   scan_apis = local.scan ? [
     "cloudfunctions.googleapis.com",
     "cloudbuild.googleapis.com",

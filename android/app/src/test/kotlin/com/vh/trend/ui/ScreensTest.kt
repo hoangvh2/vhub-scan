@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -89,13 +90,17 @@ class ScreensTest {
         val base = Fixtures.ui(tab = Tab.System)
         val day = com.vh.trend.core.ScanDay.of(Fixtures.now)
         val scans = listOf(
+            // Never answered (the function did not run): shown as stale, and it does not use up the day.
+            com.vh.trend.core.CloudScan("$day-3", day, 3, Fixtures.now - 20 * 60_000),
             com.vh.trend.core.CloudScan("$day-2", day, 2, Fixtures.now - 5 * 60_000, "failed", "Lỗi: Gemini API: hết tiền nạp trước (prepay). Nạp thêm trong Google AI Studio > Billing"),
             com.vh.trend.core.CloudScan("$day-1", day, 1, Fixtures.now - 3 * 3_600_000, "done", "Xong.", 11_200, 0.0131),
         )
-        val ui = base.copy(sync = base.sync.copy(scans = scans, today = day))
+        val ui = base.copy(sync = base.sync.copy(scans = scans, today = day, at = Fixtures.now))
+        assertEquals(1, ui.sync.scansToday)
         rule.setContent { TrendTheme { TrendApp(ui, object : UiActions { override fun startScan() { started++ } }, Fixtures.now) } }
         rule.onNodeWithTag("scan-cloud").performScrollTo()
         rule.onRoot().captureRoboImage("build/screenshots/phone-system-cloud-scan.png")
+        rule.onNodeWithText(STALE_NOTE).assertExists()
         rule.onNodeWithTag("scan-cloud").performClick()
         rule.waitForIdle()
         assertEquals(1, started)

@@ -201,6 +201,18 @@ data class CloudScan(
     val costUsd: Double? = null,
 ) {
     val finished: Boolean get() = status != null && status != "running"
+
+    /** running, done, failed, refused, waiting, or stale: no outcome after [STALE_MS] (treated as failed). */
+    fun state(nowMs: Long): String =
+        if (!finished && nowMs - (at ?: 0) > STALE_MS) "stale" else status ?: "waiting"
+
+    /** Whether it uses one of the day's scans; failed, refused and stale ones do not (the same test as the rules). */
+    fun uses(nowMs: Long): Boolean = state(nowMs) in setOf("done", "waiting", "running")
+
+    companion object {
+        /** The function's own timeout is 9 minutes; after 15 nothing will come. Same as the rules and scanJob.ts. */
+        const val STALE_MS = 15 * 60_000L
+    }
 }
 
 /** Day numbers in Vietnam time (UTC+7, no daylight saving): the same as the Firestore rules and the pipeline. */

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vh.trend.core.Action
 import com.vh.trend.core.Item
+import com.vh.trend.core.CloudScan
 import com.vh.trend.core.ScanOutcome
 import com.vh.trend.core.SettingError
 import com.vh.trend.core.SettingRules
@@ -150,7 +151,8 @@ class AppViewModel(private val repo: TrendRepository) : ViewModel() {
     private fun follow(id: String) {
         followJob?.cancel()
         followJob = viewModelScope.launch {
-            repeat(90) {
+            // Until the scan finishes, or for 15 minutes: after that it is stale (no answer will come).
+            repeat((CloudScan.STALE_MS / 8_000).toInt() + 1) {
                 delay(8_000)
                 val s = repo.refreshScans()
                 _state.update { it.copy(sync = s) }
@@ -161,6 +163,7 @@ class AppViewModel(private val repo: TrendRepository) : ViewModel() {
                     return@launch
                 }
             }
+            _state.update { it.copy(notice = Notice(++noticeId, STALE_NOTE)) }
         }
     }
 

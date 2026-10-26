@@ -30,9 +30,11 @@ class FakeNet {
     var refreshCalls = 0
     /** The rules refuse settings documents (403), as they do for an oversized or malformed one. */
     var rejectSettings = false
-    /** owners/owner/runRequests, as Firestore REST documents; the rules accept ids ending -1..-scanLimit. */
+    /** owners/owner/runRequests, as Firestore REST documents. Like the rules: ids -1..-(scanLimit + 3) in order, while
+     *  fewer than scanLimit earlier ones are done or waiting/running under 15 minutes (as of [now]). */
     val scans = linkedMapOf<String, String>()
     var scanLimit = 2
+    var now: () -> Long = { 0L }
     /** Old rules without runRequests: reading the list is refused. */
     var scansReadable = true
 
@@ -55,7 +57,14 @@ class FakeNet {
                     }
                     val id = r.url.substringAfter("documentId=")
                     val n = id.substringAfter('-').toIntOrNull() ?: 0
-                    if (n !in 1..scanLimit) return@Http HttpResponse(403, "{}")
+                    val day = id.substringBefore('-')
+                    val used = scans.filter { (k, f) ->
+                        val o = kotlinx.serialization.json.Json.parseToJsonElement(f).jsonObject
+                        val status = o["status"]?.jsonObject?.get("stringValue")?.jsonPrimitive?.content
+                        val at = o["at"]?.jsonObject?.get("integerValue")?.jsonPrimitive?.content?.toLong() ?: 0
+                        k.startsWith("$day-") && (status == "done" || ((status == null || status == "running") && at > now() - 15 * 60_000))
+                    }.size
+                    if (n !in 1..scanLimit + 3 || (n > 1 && !scans.containsKey("$day-${n - 1}")) || used >= scanLimit) return@Http HttpResponse(403, "{}")
                     if (scans.containsKey(id)) return@Http HttpResponse(409, "{}")
                     scans[id] = kotlinx.serialization.json.Json.parseToJsonElement(r.body!!).jsonObject["fields"].toString()
                     return@Http HttpResponse(200, "{}")
@@ -392,14 +401,34 @@ class RepositoryTest {
         assertEquals(ScanOutcome.Busy, r.startScan())
         net.scans["$day-1"] = """{"at":{"integerValue":"$clock"},"status":{"stringValue":"done"},"message":{"stringValue":"Xong."},"tokens":{"integerValue":"11000"},"costUsd":{"doubleValue":0.0123}}"""
         assertEquals(ScanOutcome.Started("$day-2", 2), r.startScan())
+        // A failed scan does not use up the day: the next one is still the second.
         net.scans["$day-2"] = """{"at":{"integerValue":"$clock"},"status":{"stringValue":"failed"},"message":{"stringValue":"Lỗi: x"}}"""
+        assertEquals(1, r.refreshScans().scansToday)
+        assertEquals(ScanOutcome.Started("$day-3", 2), r.startScan())
+        net.scans["$day-3"] = """{"at":{"integerValue":"$clock"},"status":{"stringValue":"done"}}"""
         assertEquals(ScanOutcome.Limit(2), r.startScan())
-        assertEquals(2, net.scans.size)
+        assertEquals(3, net.scans.size)
 
         val s = r.refreshScans()
-        assertEquals(listOf("$day-2", "$day-1"), s.scans.map { it.id })
-        assertEquals(CloudScan("$day-1", day, 1, clock, "done", "Xong.", 11000, 0.0123), s.scans[1])
+        assertEquals(listOf("$day-3", "$day-2", "$day-1"), s.scans.map { it.id })
+        assertEquals(CloudScan("$day-1", day, 1, clock, "done", "Xong.", 11000, 0.0123), s.scans[2])
         assertEquals(2, s.scansToday)
+    }
+
+    @Test
+    fun aScanWithNoAnswerFor15MinutesIsStaleAndCanBeTriedAgain() = runTest {
+        val net = FakeNet().also { n -> n.now = { clock } }
+        val r = signedIn(net)
+        val day = ScanDay.of(clock)
+        assertEquals(ScanOutcome.Started("$day-1", 1), r.startScan())
+        clock += 10 * 60_000
+        assertEquals(ScanOutcome.Busy, r.startScan())
+        assertEquals("waiting", r.state().scans.first().state(clock))
+        clock += 6 * 60_000
+        val s = r.refreshScans()
+        assertEquals("stale", s.scans.first().state(clock))
+        assertEquals(0, s.scansToday)
+        assertEquals(ScanOutcome.Started("$day-2", 1), r.startScan())
     }
 
     @Test

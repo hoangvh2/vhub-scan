@@ -28,12 +28,16 @@ data class SyncState(
     val scans: List<CloudScan> = emptyList(),
     /** Today's day number (Vietnam time), to count today's scans. */
     val today: Long = 0,
+    /** When this state was made (ms), to tell scans that got no answer. */
+    val at: Long = 0,
 ) {
-    val scansToday: Int get() = scans.count { it.day == today }
+    /** Today's scans that ran or still run; failed, refused and stuck ones do not use up the day. */
+    val scansToday: Int get() = scans.count { it.day == today && it.uses(at) }
 }
 
 /** What pressing "Quét bằng Gemini" did. */
 sealed interface ScanOutcome {
+    /** [n]: which of today's scans this is (failed ones not counted). */
     data class Started(val id: String, val n: Int) : ScanOutcome
     /** Another scan has not finished yet. */
     data object Busy : ScanOutcome
@@ -107,6 +111,7 @@ class TrendRepository(
             settingsWaiting = waiting,
             scans = scans,
             today = ScanDay.of(now()),
+            at = now(),
         )
     }
 
@@ -126,8 +131,9 @@ class TrendRepository(
     }
 
     /**
-     * Starts a Gemini scan on the cloud: creates today's next request, {day}-{n}. The Firestore rules accept only the
-     * first few of the day, so the limit holds whatever the app does; a refusal is reported as [ScanOutcome.Limit].
+     * Starts a Gemini scan on the cloud: creates today's next request, {day}-{n}. The Firestore rules accept it only while
+     * fewer than the day's scans are used (failed and stuck ones do not count), so the limit holds whatever the app
+     * does; a refusal is reported as [ScanOutcome.Limit].
      */
     suspend fun startScan(): ScanOutcome = lock.withLock {
         if (!settings.configured || !auth.signedIn) return@withLock ScanOutcome.Failed("Chưa đăng nhập.")
@@ -135,14 +141,15 @@ class TrendRepository(
             val list = cloud.scans()
             saveScans(list)
             val t = now()
-            if (list.any { !it.finished && t - (it.at ?: 0) < 12 * 60_000 }) return@withLock ScanOutcome.Busy
+            if (list.any { it.state(t) == "waiting" || it.state(t) == "running" }) return@withLock ScanOutcome.Busy
             val day = ScanDay.of(t)
             val today = list.filter { it.day == day }
+            val used = today.count { it.uses(t) }
             val n = (today.maxOfOrNull { it.n } ?: 0) + 1
             val id = "$day-$n"
             when (cloud.startScan(id, t)) {
-                ScanStart.Started -> { saveScans(listOf(CloudScan(id, day, n, t)) + list); ScanOutcome.Started(id, n) }
-                ScanStart.Refused -> ScanOutcome.Limit(today.size)
+                ScanStart.Started -> { saveScans(listOf(CloudScan(id, day, n, t)) + list); ScanOutcome.Started(id, used + 1) }
+                ScanStart.Refused -> ScanOutcome.Limit(used)
                 ScanStart.Taken -> ScanOutcome.Failed("Lượt này vừa được dùng ở thiết bị khác. Thử lại.")
                 ScanStart.Retry -> ScanOutcome.Failed("Cloud đang bận. Thử lại sau.")
             }

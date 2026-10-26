@@ -122,33 +122,94 @@ describe("settings inbox", () => {
 describe("cloud scan requests", () => {
   // Same formula as the rules and scanDay() in the pipeline (Vietnam time).
   const today = () => Math.floor((Date.now() + 7 * 3_600_000) / 86_400_000);
-  const req = { at: 1792800000000, device: "Pixel 8" };
+  const req = () => ({ at: Date.now(), device: "Pixel 8" });
+  const path = (n: number, d = today()) => `owners/owner/runRequests/${d}-${n}`;
+  /** What the cloud function writes onto a request. */
+  const outcome = (n: number, fields: Record<string, unknown>) =>
+    env.withSecurityRulesDisabled(async (c) => {
+      await updateDoc(doc(c.firestore(), path(n)), fields);
+    });
+
   it("an allowlisted account can start today's first and second scan, and read the outcome", async () => {
-    const d = today();
-    await assertSucceeds(setDoc(doc(phone(), `owners/owner/runRequests/${d}-1`), req));
-    await assertSucceeds(setDoc(doc(phone(), `owners/owner/runRequests/${d}-2`), { at: 5 }));
-    await assertSucceeds(getDoc(doc(phone(), `owners/owner/runRequests/${d}-1`)));
+    await assertSucceeds(setDoc(doc(phone(), path(1)), req()));
+    await outcome(1, { status: "done" });
+    await assertSucceeds(setDoc(doc(phone(), path(2)), { at: Date.now() }));
+    await assertSucceeds(getDoc(doc(phone(), path(1))));
     await assertSucceeds(getDocs(collection(phone(), "owners/owner/runRequests")));
   });
-  it("refuses a third scan today, scans for another day, and any other id", async () => {
+
+  it("refuses a third scan once two are done or still running, scans for another day, ids out of order, and any other id", async () => {
+    await assertSucceeds(setDoc(doc(phone(), path(1)), req()));
+    await outcome(1, { status: "done" });
+    await assertSucceeds(setDoc(doc(phone(), path(2)), req()));
+    await outcome(2, { status: "running" });
     const d = today();
-    for (const id of [`${d}-3`, `${d}-0`, `${d - 1}-1`, `${d + 1}-1`, "scan-now-123", `${d}-1x`]) {
-      await assertFails(setDoc(doc(phone(), `owners/owner/runRequests/${id}`), req));
+    for (const id of [`${d}-3`, `${d}-0`, `${d}-9`, `${d - 1}-1`, `${d + 1}-1`, "scan-now-123", `${d}-1x`]) {
+      await assertFails(setDoc(doc(phone(), `owners/owner/runRequests/${id}`), req()));
     }
+    await env.clearFirestore();
+    await assertFails(setDoc(doc(phone(), path(2)), req())); // 1 does not exist yet
   });
-  it("refuses a bad shape, a repeat of the same request, and changes to a request", async () => {
-    const id = `owners/owner/runRequests/${today()}-1`;
-    for (const d of [{ ...req, status: "done" }, { device: "x" }, { at: "now" }, { ...req, device: "x".repeat(41) }]) await assertFails(setDoc(doc(phone(), id), d));
-    await assertSucceeds(setDoc(doc(phone(), id), req));
-    await assertFails(setDoc(doc(phone(), id), req)); // exists: that would be an update
+
+  it("a failed, refused or stuck scan does not use up the day: up to 3 more tries", async () => {
+    await assertSucceeds(setDoc(doc(phone(), path(1)), req()));
+    await outcome(1, { status: "failed" });
+    await assertSucceeds(setDoc(doc(phone(), path(2)), req()));
+    await outcome(2, { status: "refused" });
+    // No answer for more than 15 minutes (the function never ran).
+    await assertSucceeds(setDoc(doc(phone(), path(3)), req()));
+    await outcome(3, { at: Date.now() - 16 * 60_000 });
+    await assertSucceeds(setDoc(doc(phone(), path(4)), req()));
+    await outcome(4, { status: "done" });
+    // 2 scans a day + 3 retries = 5 ids; one scan is done, so the last id is still free, then nothing.
+    await assertFails(setDoc(doc(phone(), path(6)), req()));
+    await assertSucceeds(setDoc(doc(phone(), path(5)), req()));
+    await outcome(5, { status: "failed" });
+    await assertFails(setDoc(doc(phone(), path(6)), req()));
+  });
+
+  it("a scan still waiting for less than 15 minutes counts, so it cannot be pressed twice in a row past the limit", async () => {
+    await assertSucceeds(setDoc(doc(phone(), path(1)), req()));
+    await assertSucceeds(setDoc(doc(phone(), path(2)), req()));
+    await assertFails(setDoc(doc(phone(), path(3)), req()));
+  });
+
+  it("refuses a bad shape, a time far from now, a repeat of the same request, and changes to a request", async () => {
+    const id = path(1);
+    for (const d of [{ ...req(), status: "done" }, { device: "x" }, { at: "now" }, { ...req(), device: "x".repeat(41) }, { at: 5 }, { at: Date.now() + 3_600_000 }]) {
+      await assertFails(setDoc(doc(phone(), id), d));
+    }
+    await assertSucceeds(setDoc(doc(phone(), id), req()));
+    await assertFails(setDoc(doc(phone(), id), req())); // exists: that would be an update
     await assertFails(updateDoc(doc(phone(), id), { status: "done" }));
     await assertFails(deleteDoc(doc(phone(), id)));
   });
+
   it("nobody else can start or read scans", async () => {
-    const id = `owners/owner/runRequests/${today()}-1`;
-    await assertFails(setDoc(doc(env.authenticatedContext("u-x", google("mallory@example.com")).firestore(), id), req));
-    await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), id), req));
+    const id = path(1);
+    await assertFails(setDoc(doc(env.authenticatedContext("u-x", google("mallory@example.com")).firestore(), id), req()));
+    await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), id), req()));
     await assertFails(getDocs(collection(env.authenticatedContext("u-x", google("mallory@example.com")).firestore(), "owners/owner/runRequests")));
+  });
+});
+
+describe("cloud scan at the most scans per day (5, so 8 ids)", () => {
+  beforeAll(async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({ projectId: PROJECT, firestore: { rules: renderRules(TEMPLATE, parseEmails("Me@Example.com, wife@example.org"), 5), host: "127.0.0.1", port: 8080 } });
+  });
+  afterAll(async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({ projectId: PROJECT, firestore: { rules: RULES, host: "127.0.0.1", port: 8080 } });
+  });
+  it("the last id still works after seven failed tries (the rules stay within Firestore's 10 document reads)", async () => {
+    const d = Math.floor((Date.now() + 7 * 3_600_000) / 86_400_000);
+    for (let n = 1; n <= 7; n++) {
+      await assertSucceeds(setDoc(doc(phone(), `owners/owner/runRequests/${d}-${n}`), { at: Date.now() }));
+      await env.withSecurityRulesDisabled((c) => updateDoc(doc(c.firestore(), `owners/owner/runRequests/${d}-${n}`), { status: "failed" }));
+    }
+    await assertSucceeds(setDoc(doc(phone(), `owners/owner/runRequests/${d}-8`), { at: Date.now() }));
+    await assertFails(setDoc(doc(phone(), `owners/owner/runRequests/${d}-9`), { at: Date.now() }));
   });
 });
 
@@ -164,7 +225,7 @@ describe("cloud scan switched off (cloud_scans_per_day = 0)", () => {
   });
   it("refuses every scan request, and the rest keeps working", async () => {
     const d = Math.floor((Date.now() + 7 * 3_600_000) / 86_400_000);
-    await assertFails(setDoc(doc(phone(), `owners/owner/runRequests/${d}-1`), { at: 1 }));
+    await assertFails(setDoc(doc(phone(), `owners/owner/runRequests/${d}-1`), { at: Date.now() }));
     await assertSucceeds(getDoc(doc(phone(), "owners/owner/snapshot/latest")));
   });
 });

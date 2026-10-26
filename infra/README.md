@@ -139,6 +139,16 @@ Chi phí: Cloud Functions, Cloud Build, Storage nằm trong hạn mức miễn p
 6. `cd .. && npm run cloud:connect` (để PC biết bucket), rồi `npm run sync`: PC gửi database và config lên bucket. Từ đây mỗi lần sync PC lấy kết quả quét trên cloud về trước, rồi mới gửi bản của mình lên.
 7. Web hoặc app → tab **Hệ thống** → **Quét bằng Gemini**. Kết quả (token, chi phí, số mục) hiện trong danh sách lần quét.
 
+Mỗi ngày tối đa `cloud_scans_per_day` lượt **chạy được**. Lượt lỗi, bị từ chối, hoặc không có kết quả sau 15 phút ("Quá thời gian") không tính; có thêm tối đa 3 lần thử lại mỗi ngày cho các lượt như vậy.
+
+**Lượt quét đứng ở "Đang chờ" hoặc "Quá thời gian"**: function không chạy. Xem log (thay project nếu khác):
+```
+gcloud functions logs read vhub-trend-scan --gen2 --region=asia-southeast1 --project=vhub-trend-482915 --limit=50
+```
+- `Signature type: http` hoặc `bỏ qua sự kiện không phải yêu cầu quét`: bản function cũ (trước bản sửa CloudEvent). Cập nhật repo, rồi `npm run cloud:function` và `terraform apply`.
+- Không có dòng log nào: trigger chưa có hoặc chưa gọi được function. Kiểm tra `gcloud eventarc triggers list --location=asia-southeast1 --project=...` và chạy lại `terraform apply`.
+- `Lỗi trên cloud: ...`: lỗi được ghi lên chính lượt quét, đọc nội dung để sửa (quyền, secret, bucket).
+
 | Việc | Cách làm |
 |---|---|
 | Tắt nút ngay | `cloud_scans_per_day = 0` → `terraform apply` (rules từ chối mọi yêu cầu mới) |
@@ -174,9 +184,9 @@ Chi phí: Cloud Functions, Cloud Build, Storage nằm trong hạn mức miễn p
 | `Inconsistent dependency lock file` | Vừa cập nhật repo có thêm provider: chạy `terraform init` rồi apply lại |
 | `Billing account ... not found` / `requires billing` khi apply Bước 10 | Chưa lên gói Blaze (Bước 10, mục 1) |
 | Lần quét báo "PC chưa gửi dữ liệu lên cloud" | Chạy `npm run cloud:connect` rồi `npm run sync` trên PC (Bước 10, mục 6) |
-| Lần quét báo "PC vừa cập nhật dữ liệu trong lúc quét" | PC sync đúng lúc cloud đang quét; kết quả cloud bị bỏ để không ghi đè. Bấm quét lại (vẫn tính một lượt) |
+| Lần quét báo "PC vừa cập nhật dữ liệu trong lúc quét" | PC sync đúng lúc cloud đang quét; kết quả cloud bị bỏ để không ghi đè. Bấm quét lại (lượt lỗi không tính) |
 | Lần quét thất bại với `402` | Hết tiền trả trước ở AI Studio |
-| "Hết lượt quét hôm nay" | Đã dùng đủ `cloud_scans_per_day` lần; lượt mới từ 0 giờ (giờ Việt Nam) |
+| "Hết lượt quét hôm nay" | Đã có đủ `cloud_scans_per_day` lượt chạy được (hoặc đã dùng hết 3 lần thử lại); lượt mới từ 0 giờ (giờ Việt Nam) |
 | Android: `Đăng nhập Google không thành công (TYPE_NO_CREDENTIAL…)` hoặc lỗi 16 | SHA-1 của APK chưa đăng ký (Bước 9, mục 2), `FIREBASE_WEB_CLIENT_ID` sai, hoặc vừa apply (đợi vài phút); máy cần có tài khoản Google và Google Play services |
 
 ## Gỡ bỏ
@@ -194,6 +204,8 @@ Firestore được bảo vệ chống xoá nhầm, nên `terraform destroy` sẽ
 | Lõi Android (đổi token Google lấy phiên Firebase, quyền, hàng đợi offline) | 13 test JVM, chạy trong CI |
 | Màn hình Android (đăng nhập, bị từ chối, chưa cấu hình, đăng xuất có xác nhận) | Robolectric trong CI. **Chưa cài trên điện thoại thật; chưa thử hộp chọn tài khoản Google thật** |
 | Quét bằng Gemini: giới hạn lượt/ngày trong rules, nút trên web tạo yêu cầu và function chạy pipeline trên bản sao database, hai lượt rồi "Hết lượt" | Rules + web trên emulator (Chromium thật), function chạy với LLM giả. **Chưa gọi Gemini thật, chưa deploy Cloud Function thật** |
+| Lượt lỗi hoặc quá 15 phút không tính, thử lại tối đa 3 lần/ngày | Rules trên emulator, function với LLM giả, lõi Android (JVM) |
+| Function nhận sự kiện Firestore dạng CloudEvent (`entry.js`) | Chạy Functions Framework trên máy build: bản mới nhận đúng yêu cầu; bản cũ (HTTP) bỏ qua sự kiện và treo, đúng triệu chứng "Đang chờ". **Chưa kiểm chứng trên Cloud Functions thật** |
 | Trao database PC ↔ bucket (không mất thao tác của PC, không ghi đè khi hai bên cùng ghi) | Test với bucket giả có kiểm tra generation như GCS |
 | `terraform plan` với `cloud_scan = true` (47 resource, key không xuất hiện trong plan) | CI |
 | `terraform apply` trên project Google thật, bật Google ở Firebase, SHA-1 | **Chưa chạy** (không có tài khoản Google trong môi trường build). Lần đầu là của bạn |
