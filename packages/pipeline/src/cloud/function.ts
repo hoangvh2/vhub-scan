@@ -39,13 +39,31 @@ export async function scan(event: FirestoreEvent): Promise<void> {
   const uid = env("OWNER_UID");
   const requestId = requestOf(event, uid);
   if (!requestId) {
-    console.log(`bỏ qua sự kiện không phải yêu cầu quét: ${event.subject ?? "?"}`);
+    // Also what an HTTP request looks like here: the function must be registered as a CloudEvent function (entry.ts).
+    console.log(`bỏ qua sự kiện không phải yêu cầu quét: subject=${event?.subject ?? "?"} document=${event?.document ?? "?"}`);
     return;
   }
   const auth = new MetadataAuth();
   const token = () => auth.token();
+  const docs = new FirestoreRest({ projectId: env("PROJECT_ID"), token });
+  try {
+    await runScan(uid, requestId, docs, token);
+  } catch (e) {
+    // Anything that escapes the job (a missing setting, Firestore or Storage refusing the function's account) is
+    // written onto the request when possible, so the apps show the error instead of waiting.
+    const message = `Lỗi trên cloud: ${(e instanceof Error ? e.message : String(e)).slice(0, 300)}`;
+    console.error(`scan ${requestId}: ${message}`);
+    const path = `owners/${uid}/${SCAN_REQUESTS}/${requestId}`;
+    const cur = await docs.get(path).catch(() => null);
+    if (cur && (cur.fields.status === undefined || cur.fields.status === "running")) {
+      await docs.update(path, { status: "failed", message, finishedAt: new Date().toISOString() }).catch((x) => console.error(`scan ${requestId}: cannot record the failure: ${x}`));
+    }
+  }
+}
+
+async function runScan(uid: string, requestId: string, docs: FirestoreRest, token: () => Promise<string>): Promise<void> {
   const r = await runCloudScan({
-    docs: new FirestoreRest({ projectId: env("PROJECT_ID"), token }),
+    docs,
     blobs: new GcsRest({ bucket: env("DATA_BUCKET"), token }),
     uid,
     requestId,

@@ -420,7 +420,11 @@ const store = {
 };
 /** Day number in Vietnam time (UTC+7): the same as the Firestore rules and scanDay() in the pipeline. */
 const scanDay = (ms) => Math.floor((ms + 7 * 3600000) / 86400000);
-const SCAN_STATUS = { running: "Đang quét", done: "Xong", failed: "Lỗi", refused: "Bị từ chối" };
+const SCAN_STATUS = { running: "Đang quét", done: "Xong", failed: "Lỗi", refused: "Bị từ chối", stale: "Quá thời gian" };
+/** No outcome after 15 minutes: treated as failed, and it does not use up a scan (the same as scanUses() in the rules). */
+const SCAN_STALE_MS = 15 * 60000;
+const scanState = (x) => (!x.status || x.status === "running") && Date.now() - (x.at || 0) > SCAN_STALE_MS ? "stale" : x.status || "waiting";
+const scanUses = (x) => ["done", "waiting", "running"].includes(scanState(x));
 const cloud = {
   session: store.get("vhSession"), snap: null, snapAt: 0,
   gsi: null,
@@ -541,21 +545,22 @@ const cloud = {
     }).sort((a, b) => b.day - a.day || b.n - a.n);
   },
   /**
-   * Starts a cloud scan: the next free slot of today, {day}-{n}. The Firestore rules accept only today's first
-   * SCANS_PER_DAY slots, so a refusal here means the day's limit is reached (or the cloud scan is switched off).
+   * Starts a cloud scan: today's next id, {day}-{n}. The Firestore rules accept it only while fewer than the day's
+   * scans are used (failed and stuck ones do not count), so a refusal here means the day's limit is reached (or the
+   * cloud scan is switched off).
    */
   async startScan() {
     const day = scanDay(Date.now()), list = await this.scans(), today = list.filter((x) => x.day === day);
-    const busy = list.find((x) => (!x.status || x.status === "running") && Date.now() - (x.at || 0) < 12 * 60000);
+    const busy = list.find((x) => ["waiting", "running"].includes(scanState(x)));
     if (busy) return { started: false, reason: "Đang có một lần quét trên cloud. Đợi nó xong (vài phút)." };
     const n = today.reduce((m, x) => Math.max(m, x.n), 0) + 1;
     const idt = await this.idToken();
     const fields = { at: { integerValue: String(Date.now()) }, device: { stringValue: "web" } };
     const r = await fetch(`${this.docs()}/runRequests?documentId=${day}-${n}`, { method: "POST", headers: { authorization: "Bearer " + idt, "content-type": "application/json" }, body: JSON.stringify({ fields }) });
-    if (r.status === 403) return { started: false, reason: `Hết lượt quét hôm nay (đã dùng ${today.length}), hoặc quét trên cloud đang tắt. Lượt mới từ 0 giờ.` };
+    if (r.status === 403) return { started: false, reason: `Hết lượt quét hôm nay (đã dùng ${today.filter(scanUses).length}), hoặc quét trên cloud đang tắt. Lượt mới từ 0 giờ.` };
     if (r.status === 409) return { started: false, reason: "Lượt này vừa được dùng ở thiết bị khác. Thử lại." };
     if (!r.ok) throw new Error("Cloud trả lỗi " + r.status);
-    return { started: true, id: `${day}-${n}`, used: n };
+    return { started: true, id: `${day}-${n}`, used: today.filter(scanUses).length + 1 };
   },
   /** The settings form from the snapshot, with a change that the PC has not applied yet shown on top. */
   settingsPage() {
@@ -717,22 +722,23 @@ function followScan(id, since) {
     let it = null;
     try { it = (await cloud.scans()).find((x) => x.id === id); } catch {}
     const final = it && it.status && it.status !== "running";
-    if (!final && Date.now() - since < 12 * 60000) return followScan(id, since);
+    if (!final && Date.now() - since < SCAN_STALE_MS) return followScan(id, since);
     if (it && it.status === "done") { await cloud.snapshot(true).catch(() => null); toast(it.message || "Quét xong."); }
-    else toast(it && it.message ? it.message : "Chưa thấy kết quả lần quét trên cloud. Xem Hệ thống > Quét bằng Gemini.");
+    else toast(it && it.message ? it.message : "Cloud không trả lời sau 15 phút. Lượt này không tính, có thể quét lại. Xem Hệ thống > Quét bằng Gemini.");
     load({ keepIndex: true });
   }, 8000);
 }
 function scanPanel() {
   const box = h("div", {}, h("p", { class: "hint" }, "Đang tải…"));
   cloud.scans().then((list) => {
-    const day = scanDay(Date.now()), today = list.filter((x) => x.day === day).length;
+    const day = scanDay(Date.now()), today = list.filter((x) => x.day === day && scanUses(x)).length;
     box.replaceChildren(
-      h("p", { class: "hint" }, `Quét trên cloud khi PC tắt. Hôm nay đã dùng ${today} lượt (giới hạn do cloud_scans_per_day trong infra/terraform.tfvars). Kết quả về PC ở lần đồng bộ kế tiếp.`),
+      h("p", { class: "hint" }, `Quét trên cloud khi PC tắt. Hôm nay đã dùng ${today} lượt; lượt lỗi hoặc quá thời gian không tính (giới hạn do cloud_scans_per_day trong infra/terraform.tfvars). Kết quả về PC ở lần đồng bộ kế tiếp.`),
       list.length ? h("ul", { class: "scans num" }, list.slice(0, 6).map((x) => h("li", {},
-        h("span", { class: "dot " + (x.status === "done" ? "ok" : x.status === "failed" || x.status === "refused" ? "bad" : "run") }),
-        h("span", {}, `${x.at ? new Date(x.at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : x.id} · ${SCAN_STATUS[x.status] || "Đang chờ"}${x.costUsd != null ? ` · ${fmt.format(x.tokens || 0)} token · $${Number(x.costUsd).toFixed(4)}` : ""}`),
-        x.message && x.status !== "done" ? h("span", { class: "msg" }, x.message) : null))) : h("p", { class: "hint" }, "Chưa quét trên cloud lần nào."),
+        h("span", { class: "dot " + ({ done: "ok", failed: "bad", refused: "bad", stale: "bad" }[scanState(x)] || "run") }),
+        h("span", {}, `${x.at ? new Date(x.at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : x.id} · ${SCAN_STATUS[scanState(x)] || "Đang chờ"}${x.costUsd != null ? ` · ${fmt.format(x.tokens || 0)} token · $${Number(x.costUsd).toFixed(4)}` : ""}`),
+        x.message && x.status !== "done" ? h("span", { class: "msg" }, x.message)
+          : scanState(x) === "stale" ? h("span", { class: "msg" }, "Cloud không trả lời sau 15 phút. Lượt này không tính, có thể quét lại.") : null))) : h("p", { class: "hint" }, "Chưa quét trên cloud lần nào."),
       h("button", { class: "btn sm", id: "scan-cloud", style: "justify-self:start", onclick: scanOnCloud }, icon("run"), h("span", {}, "Quét bằng Gemini")));
   }).catch((e) => box.replaceChildren(h("div", { class: "alert bad" }, e.message)));
   const p = panel("Quét bằng Gemini", box);

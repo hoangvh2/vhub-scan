@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DB_OBJECT, pullDb, pushDb } from "../src/cloud/dbsync.js";
 import { requestOf } from "../src/cloud/function.js";
-import { runCloudScan, scanDay, type ScanJobDeps } from "../src/cloud/scanJob.js";
+import { runCloudScan, scanDay, scanUses, STALE_MESSAGE, type ScanJobDeps } from "../src/cloud/scanJob.js";
 import { githubSettings } from "../src/config.js";
 import { FakeLlm } from "../src/llm/fake.js";
 import { runPipeline } from "../src/pipeline.js";
@@ -73,13 +73,47 @@ describe("cloud scan", () => {
     expect(blobs.objects.get(DB_OBJECT)!.generation).toBe(gen);
   });
 
-  it("refuses requests beyond the daily limit or for another day, without scanning", async () => {
-    for (const id of [`${TODAY}-3`, `${TODAY - 1}-1`, "anything"]) {
+  it("refuses ids beyond the retries or for another day, without scanning", async () => {
+    for (const id of [`${TODAY}-6`, `${TODAY - 1}-1`, "anything"]) {
       const { deps, docs, fake } = await setup({ requestId: id });
       expect((await runCloudScan(deps)).status).toBe("refused");
       expect(docs.docs.get(`owners/owner/runRequests/${id}`)!.status).toBe("refused");
       expect(fake.calls).toHaveLength(0);
     }
+  });
+
+  it("counts only scans that ran: refuses a third once two are done, allows a retry after a failure", async () => {
+    const full = await setup({ requestId: `${TODAY}-3` });
+    full.docs.docs.set(`owners/owner/runRequests/${TODAY}-1`, { at: NOW.getTime(), status: "done" });
+    full.docs.docs.set(`owners/owner/runRequests/${TODAY}-2`, { at: NOW.getTime(), status: "done" });
+    expect((await runCloudScan(full.deps)).status).toBe("refused");
+    expect(full.fake.calls).toHaveLength(0);
+
+    const retry = await setup({ requestId: `${TODAY}-3` });
+    retry.docs.docs.set(`owners/owner/runRequests/${TODAY}-1`, { at: NOW.getTime(), status: "done" });
+    retry.docs.docs.set(`owners/owner/runRequests/${TODAY}-2`, { at: NOW.getTime(), status: "failed" });
+    expect((await runCloudScan(retry.deps)).status).toBe("done");
+  });
+
+  it("closes earlier requests that never got an answer as failed, and they do not count", async () => {
+    const { deps, docs } = await setup({ requestId: `${TODAY}-3` });
+    // The scan runs one hour after NOW: these two have waited far longer than 15 minutes.
+    docs.docs.set(`owners/owner/runRequests/${TODAY}-1`, { at: NOW.getTime() });
+    docs.docs.set(`owners/owner/runRequests/${TODAY}-2`, { at: NOW.getTime(), status: "running" });
+    expect((await runCloudScan(deps)).status).toBe("done");
+    for (const n of [1, 2]) {
+      expect(docs.docs.get(`owners/owner/runRequests/${TODAY}-${n}`)).toMatchObject({ status: "failed", message: STALE_MESSAGE });
+    }
+  });
+
+  it("a request still waiting or running for less than 15 minutes counts", () => {
+    const now = NOW.getTime();
+    expect(scanUses({ at: now - 60_000 }, now)).toBe(true);
+    expect(scanUses({ at: now - 60_000, status: "running" }, now)).toBe(true);
+    expect(scanUses({ at: now - 16 * 60_000 }, now)).toBe(false);
+    expect(scanUses({ at: 1, status: "done" }, now)).toBe(true);
+    expect(scanUses({ at: now, status: "failed" }, now)).toBe(false);
+    expect(scanUses({ at: now, status: "refused" }, now)).toBe(false);
   });
 
   it("fails with a clear message when the PC has not shared its database yet", async () => {

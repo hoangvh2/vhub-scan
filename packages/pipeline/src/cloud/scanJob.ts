@@ -26,8 +26,22 @@ export const SCAN_REQUESTS = "runRequests";
 /** Vietnam has no daylight saving time: day boundaries are fixed at 17:00 UTC. */
 export const DAY_OFFSET_MS = 7 * 3_600_000;
 const KEEP_DAYS = 14;
+/** Extra request ids per day for trying again after failed scans (SCAN_RETRIES in firebase/gen-rules.mjs). */
+export const SCAN_RETRIES = 3;
+/** A request with no outcome after this long is treated as failed (the function's own timeout is 9 minutes). */
+export const SCAN_STALE_MS = 15 * 60_000;
 
 export const scanDay = (ms: number): number => Math.floor((ms + DAY_OFFSET_MS) / 86_400_000);
+
+/**
+ * Whether a request uses one of the day's scans: done, or still waiting or running and not stale. Failed, refused and
+ * stale ones do not, so a broken scan can be tried again. The Firestore rules (scanUses) apply the same test.
+ */
+export function scanUses(f: Record<string, unknown>, nowMs: number): boolean {
+  const status = f.status === undefined ? "waiting" : f.status;
+  if (status === "done") return true;
+  return (status === "waiting" || status === "running") && typeof f.at === "number" && f.at > nowMs - SCAN_STALE_MS;
+}
 
 export type ScanStatus = "running" | "done" | "failed" | "refused";
 
@@ -68,9 +82,23 @@ export async function runCloudScan(d: ScanJobDeps): Promise<ScanJobResult> {
   };
 
   const m = /^(\d{1,7})-(\d{1,2})$/.exec(d.requestId);
-  if (!m || Number(m[1]) !== scanDay(now.getTime()) || Number(m[2]) < 1 || Number(m[2]) > d.perDay) {
+  const day = scanDay(now.getTime());
+  if (!m || Number(m[1]) !== day || Number(m[2]) < 1 || Number(m[2]) > d.perDay + SCAN_RETRIES) {
     return finish("refused", `Yêu cầu không hợp lệ hoặc đã hết lượt hôm nay (tối đa ${d.perDay} lần/ngày).`);
   }
+  // Earlier requests of today: the stuck ones are closed as failed, and only scans that ran (or still run) count.
+  const earlier = (await d.docs.list(`owners/${d.uid}/${SCAN_REQUESTS}`)).filter((r) => {
+    const x = /^(\d+)-(\d+)$/.exec(r.id);
+    return x !== null && Number(x[1]) === day && Number(x[2]) < Number(m[2]);
+  });
+  for (const r of earlier) {
+    const status = r.fields.status;
+    if ((status === undefined || status === "running") && !scanUses(r.fields, now.getTime())) {
+      await d.docs.update(`owners/${d.uid}/${SCAN_REQUESTS}/${r.id}`, { status: "failed", message: STALE_MESSAGE, finishedAt: now.toISOString() });
+    }
+  }
+  const used = earlier.filter((r) => scanUses(r.fields, now.getTime())).length;
+  if (used >= d.perDay) return finish("refused", `Hôm nay đã dùng hết ${d.perDay} lượt quét.`);
   await d.docs.update(path, { status: "running", startedAt: now.toISOString(), model: d.model });
 
   let db: Db | null = null;
@@ -123,6 +151,8 @@ export async function runCloudScan(d: ScanJobDeps): Promise<ScanJobResult> {
     db?.close();
   }
 }
+
+export const STALE_MESSAGE = "Quá thời gian: cloud không trả lời sau 15 phút. Lượt này không tính, có thể quét lại.";
 
 /** Requests older than two weeks are only history: removed so the list the apps read stays short. */
 async function cleanup(d: ScanJobDeps, now: Date): Promise<void> {

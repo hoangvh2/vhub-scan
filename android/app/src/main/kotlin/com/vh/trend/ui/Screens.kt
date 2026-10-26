@@ -408,8 +408,9 @@ fun SystemPane(ui: UiState, on: UiActions, now: Long, modifier: Modifier) {
     if (confirm) SignOutDialog(onCancel = { confirm = false }, onConfirm = { confirm = false; on.signOut() })
 }
 
-private val SCAN_STATUS = mapOf("running" to "Đang quét", "done" to "Xong", "failed" to "Lỗi", "refused" to "Bị từ chối")
+private val SCAN_STATUS = mapOf("running" to "Đang quét", "done" to "Xong", "failed" to "Lỗi", "refused" to "Bị từ chối", "stale" to "Quá thời gian", "waiting" to "Đang chờ")
 private val scanTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm d/M")
+internal const val STALE_NOTE = "Cloud không trả lời sau 15 phút. Lượt này không tính, có thể quét lại."
 
 /** "Quét bằng Gemini": a scan on the cloud while the PC is off, a few per day (the limit is in the Firestore rules). */
 @Composable
@@ -417,26 +418,28 @@ private fun CloudScanPanel(ui: UiState, on: UiActions) {
     val c = T.c
     Panel("Quét bằng Gemini") {
         Text(
-            "Quét trên cloud khi PC tắt. Hôm nay đã dùng ${ui.sync.scansToday} lượt; giới hạn mỗi ngày do cloud_scans_per_day trên PC đặt. Kết quả hiện ở đây sau 1–3 phút.",
+            "Quét trên cloud khi PC tắt. Hôm nay đã dùng ${ui.sync.scansToday} lượt; lượt lỗi hoặc quá thời gian không tính. Giới hạn mỗi ngày do cloud_scans_per_day trên PC đặt. Kết quả hiện ở đây sau 1–3 phút.",
             style = MaterialTheme.typography.bodyMedium, color = c.ink2,
         )
-        ui.sync.scans.take(3).forEach { ScanRow(it) }
+        ui.sync.scans.take(3).forEach { ScanRow(it, ui.sync.at) }
         QuietButton(if (ui.scanning) "Đang gửi…" else "Quét bằng Gemini", Icons.Scan, modifier = Modifier.testTag("scan-cloud")) { if (!ui.scanning) on.startScan() }
     }
 }
 
 @Composable
-private fun ScanRow(x: CloudScan) {
+private fun ScanRow(x: CloudScan, now: Long) {
     val c = T.c
-    val bad = x.status == "failed" || x.status == "refused"
+    val state = x.state(now)
+    val bad = state == "failed" || state == "refused" || state == "stale"
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(if (bad) c.neg else if (x.status == "done") c.pos else c.warn))
             val time = x.at?.let { scanTime.format(java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault())) } ?: x.id
             val cost = x.costUsd?.let { " · ${compact((x.tokens ?: 0).toInt())} token · $" + String.format(java.util.Locale.US, "%.4f", it) } ?: ""
-            Text("$time · ${SCAN_STATUS[x.status] ?: "Đang chờ"}$cost", style = MaterialTheme.typography.bodySmall, color = c.ink)
+            Text("$time · ${SCAN_STATUS[state] ?: "Đang chờ"}$cost", style = MaterialTheme.typography.bodySmall, color = c.ink)
         }
-        x.message?.let { m -> if (bad) Text(m, style = MaterialTheme.typography.bodySmall, color = c.mute, modifier = Modifier.padding(start = 16.dp)) }
+        val note = x.message ?: if (state == "stale") STALE_NOTE else null
+        note?.let { m -> if (bad) Text(m, style = MaterialTheme.typography.bodySmall, color = c.mute, modifier = Modifier.padding(start = 16.dp)) }
     }
 }
 
